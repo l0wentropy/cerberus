@@ -1,13 +1,9 @@
 /*
- * main.cpp
  *
- *  Cerberus v2.1.0
+ *  Cerberus
  *  Created on: Dec 18, 2020
- *  Last changes: Dec 21, 2022
- *      Author: kernelp4n1c
- *      Build on:
- *          OpenSSL 3.0.7 1 Nov 2022
- *          Argon2 v13 20190702-4
+ *  Author: kernelp4n1c
+ *  Build on: OpenSSL, Argon2
  *
  */
 #include <stdio.h>
@@ -54,10 +50,10 @@
 
 void printHelp()
 {
-  printf("Cerberus v%s (c) 2022 powered by kernelp4n1c\n\n", _CERBERUS_VERSION);
+  printf("Cerberus v%s powered by kernelp4n1c (2024)\n\n", _CERBERUS_VERSION);
   printf("AES256-GCM encryption tool\n");
-//  printf("Keys management: RSA, Elliptic Curves (ECIES), Argon2 pbkdf\n");
-  printf("Keys management: RSA, Argon2 pbkdf\n");
+//  printf("Keys management: RSA, Elliptic Curves (ECIES), Argon2\n");
+  printf("Keys management: RSA, Argon2\n");
   printf("Built against: OpenSSL, Argon2 shared libs\n");
   printf("\n");
   printf("%s\n", _HEADER_USAGE_);
