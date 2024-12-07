@@ -539,58 +539,17 @@ bool Cerberus::_decryptFile()
   return utils::gcmDecryptFileWrap(sIn, sOut, vKey, vIv, vTag, llReadLimit, ullProcessedBytes, bForce);
 }
 
-bool Cerberus::deriveAesKeys(const std::vector<unsigned char> &_vPassphraseBytes, const std::vector<unsigned char> &_vKeyFileBytes, std::vector<unsigned char> &_vKey, std::vector<unsigned char> &_vIv)
+bool Cerberus::deriveAesKeys(const std::vector<unsigned char> &_vSecretSequence, const std::vector<unsigned char> &_vSalt, std::vector<unsigned char> &_vKey, std::vector<unsigned char> &_vIv)
 {
-  if (_vPassphraseBytes.empty() && _vKeyFileBytes.empty())
+  if (_vSecretSequence.empty())
   {
     printf("Passphrase and key file cannot be both empty\n");
     return false;
   }
 
-  const unsigned int uiHashLen = 16; // as recommended salt length by Argon2 spec
-  std::vector<unsigned char> vHmacHash(uiHashLen, 0);
   std::vector<unsigned char> vKeys(AES256_KEY_SIZE + IV_SIZE, 0);
   typedef bool FuncArgonVariant(unsigned char*, uint32_t, unsigned char*, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, unsigned char*, unsigned char*, uint32_t);
   FuncArgonVariant *fArgonVariantPointer = NULL;
-  unsigned char* ucPointToArgonPass = _vPassphraseBytes.empty() ? (unsigned char*)_vKeyFileBytes.data() : (unsigned char*)_vPassphraseBytes.data();
-  const unsigned int uiArgonPassLen = _vPassphraseBytes.empty() ? _vKeyFileBytes.size() : _vPassphraseBytes.size();
-  unsigned char* ucOptSecret = NULL;
-  uint32_t uiOptSecretLen = 0;
-  bool bIsZeroed = false;
-
-  if (!_vPassphraseBytes.empty())
-  {
-    const unsigned int uiDivider = _vPassphraseBytes.size() > 1 ? 2 : 1;
-    utils::PBKDF2_HMAC_SHA_512(
-      (unsigned char*)_vPassphraseBytes.data(), _vPassphraseBytes.size(),
-      (unsigned char*)_vPassphraseBytes.data(), _vPassphraseBytes.size() / uiDivider,
-      PBKDF2_PRE_ITERATIONS, vHmacHash.size(), &vHmacHash[0]);
-
-    if (!_vKeyFileBytes.empty())
-    {
-      uiOptSecretLen = _vKeyFileBytes.size();
-      ucOptSecret = (unsigned char*)malloc(uiOptSecretLen);
-      if (!ucOptSecret)
-      {
-        printf("Could not allocate memory to derive keys\n");
-        return false;
-      }
-      memset(ucOptSecret, 0, uiOptSecretLen);
-
-      for (unsigned int i = 0; i < uiOptSecretLen; ++i)
-      {
-        ucOptSecret[i] = _vKeyFileBytes[i];
-      }
-    }
-  }
-  else
-  {
-    const unsigned int uiDivider = _vKeyFileBytes.size() > 1 ? 2 : 1;
-    utils::PBKDF2_HMAC_SHA_512(
-      (unsigned char*)_vKeyFileBytes.data(), _vKeyFileBytes.size(),
-      (unsigned char*)_vKeyFileBytes.data(), _vKeyFileBytes.size() / uiDivider,
-      PBKDF2_PRE_ITERATIONS, uiHashLen, &vHmacHash[0]);
-  }
 
   if (ucArgonVariant == ARGON2ID_VAR)
   {
@@ -606,43 +565,15 @@ bool Cerberus::deriveAesKeys(const std::vector<unsigned char> &_vPassphraseBytes
   }
   else
   {
-    if (ucOptSecret)
-    {
-      utils::memset_sec(ucOptSecret, uiOptSecretLen, bIsZeroed);
-      if (!bIsZeroed)
-      {
-        printf("Memory have not been zeroed\n");
-      }
-      free(ucOptSecret);
-    }
     printf("Unknown Argon2 variant\n");
     return false;
   }
 
-  if (!fArgonVariantPointer(ucPointToArgonPass, uiArgonPassLen, (unsigned char*)vHmacHash.data(), vHmacHash.size(),
-      uiArgonIterations, (1 << ucArgonMemory), uiArgonThreads, vKeys.size(), &vKeys[0], ucOptSecret, uiOptSecretLen))
+  if (!fArgonVariantPointer((unsigned char*)_vSecretSequence.data(), _vSecretSequence.size(), (unsigned char*)_vSalt.data(), _vSalt.size(),
+      uiArgonIterations, (1 << ucArgonMemory), uiArgonThreads, vKeys.size(), &vKeys[0], NULL, 0))
   {
-    if (ucOptSecret)
-    {
-      utils::memset_sec(ucOptSecret, uiOptSecretLen, bIsZeroed);
-      if (!bIsZeroed)
-      {
-        printf("Memory have not been zeroed\n");
-      }
-      free(ucOptSecret);
-    }
     printf("Argon2 internal error\n");
     return false;
-  }
-
-  if (ucOptSecret)
-  {
-    utils::memset_sec(ucOptSecret, uiOptSecretLen, bIsZeroed);
-    if (!bIsZeroed)
-    {
-      printf("Memory have not been zeroed\n");
-    }
-    free(ucOptSecret);
   }
 
   _vKey = (std::vector<unsigned char>(vKeys.begin(), vKeys.begin() + AES256_KEY_SIZE));
