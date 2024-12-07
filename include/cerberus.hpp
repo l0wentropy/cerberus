@@ -91,7 +91,7 @@ private:
   void reset();
   bool _encryptFile();
   bool _decryptFile();
-  bool deriveAesKeys(const std::vector<unsigned char> &_vPassphraseBytes, const std::vector<unsigned char> &_vKeyFileBytes, std::vector<unsigned char> &_vKey, std::vector<unsigned char> &_vIv);
+  bool deriveAesKeys(const std::vector<unsigned char> &_vSecretSequence, const std::vector<unsigned char> &_vSalt, std::vector<unsigned char> &_vKey, std::vector<unsigned char> &_vIv);
 };
 
 #endif
