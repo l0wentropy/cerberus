@@ -158,6 +158,7 @@ void Cerberus::reset()
 bool Cerberus::_encryptFile()
 {
   unsigned long long ullProcessedBytes = 0;
+  std::vector<unsigned char> vSalt(ARGON2_DEFAULT_SALT_SIZE);
   std::vector<unsigned char> vKey(AES256_KEY_SIZE, 0), vIv(IV_SIZE, 0), vTag(TAG_SIZE, 0);
   std::vector<unsigned char> vAppend;
   const mode_t flagsWrite = O_WRONLY | O_APPEND;
@@ -172,6 +173,15 @@ bool Cerberus::_encryptFile()
   }
   else
   {
+    if (!utils::genRandBytes(vSalt, vSalt.size()))
+    {
+      printf("Cannot generate random bytes for salt\n");
+      return false;
+    }
+
+    std::vector<unsigned char> vSecretSequence(vPassphraseBytes.begin(), vPassphraseBytes.end());
+    vSecretSequence.insert(vSecretSequence.end(), vKeyFileBytes.begin(), vKeyFileBytes.end());
+
     printf("Argon2 options:");
     printf("\n\t");
     // TODO: change default behaviour. check when setting params 
@@ -195,7 +205,7 @@ bool Cerberus::_encryptFile()
     printf("Memory [%llu KiB]\n", (unsigned long long)((unsigned long long)(1 << ucArgonMemory) * 1024) / 1024);
 
     printf("Deriving keys...\n");
-    if (!deriveAesKeys(vPassphraseBytes, vKeyFileBytes, vKey, vIv))
+    if (!deriveAesKeys(vSecretSequence, vSalt, vKey, vIv))
     {
       return false;
     }
@@ -257,6 +267,8 @@ bool Cerberus::_encryptFile()
     vAppend.push_back(uiArgonThreads & 0xff);
 
     vAppend.push_back(ucArgonMemory);
+
+    vAppend.insert(vAppend.end(), vSalt.begin(), vSalt.end());
 
     vAppend.push_back(AES_ENC_OPT_KEY);
   }
@@ -473,6 +485,8 @@ bool Cerberus::_decryptFile()
       ucArgonMemory = vTmp[9];
     }
 
+    const std::vector<unsigned char> vSalt(vTmp.begin() + (vTmp.size() - ARGON2_DEFAULT_SALT_SIZE), vTmp.end());
+
     if (!bIsTagDetached)
     {
       if (llFileSize <= TAG_SIZE + ARGON2_METADATA_SIZE + AES_KEY_OPCODE_SIZE + AES_TAG_OPCODE_SIZE + AES_SIGNATURE_SIZE)
@@ -516,8 +530,11 @@ bool Cerberus::_decryptFile()
     printf("\n\t");
     printf("Memory [%llu KiB]\n", (unsigned long long)((unsigned long long)(1 << ucArgonMemory) * 1024) / 1024);
 
+    std::vector<unsigned char> vSecretSequence(vPassphraseBytes.begin(), vPassphraseBytes.end());
+    vSecretSequence.insert(vSecretSequence.end(), vKeyFileBytes.begin(), vKeyFileBytes.end());
+
     printf("Deriving keys...\n");
-    if (!deriveAesKeys(vPassphraseBytes, vKeyFileBytes, vKey, vIv))
+    if (!deriveAesKeys(vSecretSequence, vSalt, vKey, vIv))
     {
       utils::CloseFile(fdIn);
       return false;

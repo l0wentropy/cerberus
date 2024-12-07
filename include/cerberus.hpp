@@ -12,7 +12,7 @@
 #include "config.hpp"
 
 #define _MAX_KEY_FILE_SIZE          1024 * 1024 * 64
-#define PBKDF2_PRE_ITERATIONS       1024
+#define ARGON2_DEFAULT_SALT_SIZE    32
 #define ARGON2ID_VAR                0x00
 #define ARGON2I_VAR                 0x01
 #define ARGON2D_VAR                 0x02
@@ -29,10 +29,12 @@
 *   Argon2 iterations (4 bytes) [Argon2]
 *   Argon2 threads (4 bytes) [Argon2]
 *   Argon2 memory degree (1 byte) [Argon2]
+*   Argon2 salt (32 bytes) [Argon2]
 *   Key management opcode (RSA/Argon2/ECC, 1 byte) [General]
 *   AES verification tag opcode (attached/detached, 1 byte) [General]
 *   AES signature (8 byte)
 */
+
 const unsigned int AES_SIGNATURE_SIZE = 8;
 const unsigned char AES_FILE_SIGNATURE[AES_SIGNATURE_SIZE] = { 0x3a, 0x7f, 0x7c, 0x72, 0xbc, 0x94, 0xae, 0xda };
 
@@ -45,7 +47,7 @@ const unsigned char AES_ENC_OPT_TAG_ATTACHED = 0x00;
 const unsigned char AES_ENC_OPT_TAG_DETACHED = 0x01;
 
 const unsigned int RSA_METADATA_SIZE = 2;
-const unsigned int ARGON2_METADATA_SIZE = 1 + 4 + 4 + 1;
+const unsigned int ARGON2_METADATA_SIZE = 1 + 4 + 4 + 1 + ARGON2_DEFAULT_SALT_SIZE;
 
 class Cerberus
 {
