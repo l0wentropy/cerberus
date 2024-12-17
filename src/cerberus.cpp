@@ -18,12 +18,12 @@ bool Cerberus::encryptFile()
     printf("Input and output files paths must be set first\n");
     return false;
   }
-  if (bProcessWithRsa && rsaKey == NULL)
+  if (ucKeyManagementOpt == AES_ENC_OPT_RSA && rsaKey == NULL)
   {
     printf("RSA key is not loaded\n");
     return false;
   }
-  else if (!bProcessWithRsa && vPassphraseBytes.empty() && vKeyFileBytes.empty())
+  else if (ucKeyManagementOpt == AES_ENC_OPT_KEY && vPassphraseBytes.empty() && vKeyFileBytes.empty())
   {
     printf("Either passphrase or key file data must be loaded\n");
     return false;
@@ -39,12 +39,12 @@ bool Cerberus::decryptFile()
     printf("Input and output files paths must be set first\n");
     return false;
   }
-  if (bProcessWithRsa && rsaKey == NULL)
+  if (ucKeyManagementOpt == AES_ENC_OPT_RSA && rsaKey == NULL)
   {
     printf("RSA key is not loaded\n");
     return false;
   }
-  else if (!bProcessWithRsa && vPassphraseBytes.empty() && vKeyFileBytes.empty())
+  else if (ucKeyManagementOpt == AES_ENC_OPT_KEY && vPassphraseBytes.empty() && vKeyFileBytes.empty())
   {
     printf("Either passphrase or key file data must be loaded\n");
     return false;
@@ -55,12 +55,17 @@ bool Cerberus::decryptFile()
 
 void Cerberus::processWithRsa()
 {
-  bProcessWithRsa = true;
+  ucKeyManagementOpt = AES_ENC_OPT_RSA;
 }
 
 void Cerberus::processWithKeys()
 {
-  bProcessWithRsa = false;
+  ucKeyManagementOpt = AES_ENC_OPT_KEY;
+}
+
+void Cerberus::ProcessWithEcc()
+{
+  ucKeyManagementOpt = AES_ENC_OPT_ECC;
 }
 
 void Cerberus::setInOutPaths(const std::string &_sIn, const std::string &_sOut)
@@ -69,28 +74,31 @@ void Cerberus::setInOutPaths(const std::string &_sIn, const std::string &_sOut)
   sOut = _sOut;
 }
 
+
+void Cerberus::unsetInOutPaths()
+{
+  sIn.clear();
+  sOut.clear();
+}
+
 void Cerberus::setRsaKey(RSA *_rsaKey)
 {
   rsaKey = _rsaKey;
-  bProcessWithRsa = true;
 }
 
 void Cerberus::setPassphrase(const std::vector<unsigned char> &_vPassphraseBytes)
 {
   vPassphraseBytes = _vPassphraseBytes;
-  bProcessWithRsa = false;
 }
 
 void Cerberus::setKeyFileData(const std::vector<unsigned char> &_vKeyFileBytes)
 {
   vKeyFileBytes = _vKeyFileBytes;
-  bProcessWithRsa = false;
 }
 
 void Cerberus::unsetRsaKey()
 {
   rsaKey = NULL;
-  bProcessWithRsa = false;
 }
 
 void Cerberus::unsetPassphrase()
@@ -133,26 +141,26 @@ void Cerberus::unsetForce()
   bForce = false;
 }
 
+void Cerberus::reset()
+{
+  _reset();
+}
+
 Cerberus::~Cerberus()
 {
 
 }
 
-void Cerberus::reset()
+void Cerberus::_reset()
 {
-  bProcessWithRsa = true;
-  bDetachHeader = false;
-  bForce = false;
-  rsaKey = NULL;
-  sIn.clear();
-  sOut.clear();
-  sTag.clear();
-  vPassphraseBytes.clear();
-  vKeyFileBytes.clear();
-  ucArgonVariant = ARGON2ID_VAR;
-  uiArgonIterations = ARGON2_DEFAULT_ITERATIONS;
-  uiArgonThreads = ARGON2_DEFAULT_ITERATIONS;
-  ucArgonMemory = ARGON2_DEFAULT_MEM_DEGREE;
+  ucKeyManagementOpt = AES_ENC_OPT_RSA;
+  attachTag();
+  unsetForce();
+  unsetInOutPaths();
+  unsetRsaKey();
+  unsetPassphrase();
+  unsetKeyFileData();
+  setArgonParams(ARGON2ID_VAR, ARGON2_DEFAULT_ITERATIONS, ARGON2_DEFAULT_THREADS, ARGON2_DEFAULT_MEM_DEGREE);
 }
 
 bool Cerberus::_encryptFile()
@@ -163,7 +171,7 @@ bool Cerberus::_encryptFile()
   std::vector<unsigned char> vAppend;
   const mode_t flagsWrite = O_WRONLY | O_APPEND;
 
-  if (bProcessWithRsa)
+  if (ucKeyManagementOpt == AES_ENC_OPT_RSA)
   {
     if (!utils::genRandBytes(vKey, vKey.size()) || !utils::genRandBytes(vIv, vIv.size()))
     {
@@ -171,7 +179,7 @@ bool Cerberus::_encryptFile()
       return false;
     }
   }
-  else
+  else if (ucKeyManagementOpt == AES_ENC_OPT_KEY)
   {
     if (!utils::genRandBytes(vSalt, vSalt.size()))
     {
@@ -184,7 +192,6 @@ bool Cerberus::_encryptFile()
 
     printf("Argon2 options:");
     printf("\n\t");
-    // TODO: change default behaviour. check when setting params 
     if (ucArgonVariant == ARGON2ID_VAR)
     {
       printf("Variant [Argon2id]");
@@ -210,6 +217,10 @@ bool Cerberus::_encryptFile()
       return false;
     }
   }
+  else
+  {
+    // TODO: ECC
+  }
 
   printf("Encryption...\n");
   if (!utils::gcmEncryptFileWrap(sIn, sOut, vKey, vIv, ullProcessedBytes, vTag))
@@ -218,7 +229,7 @@ bool Cerberus::_encryptFile()
     return false;
   }
 
-  if (bProcessWithRsa)
+  if (ucKeyManagementOpt == AES_ENC_OPT_RSA)
   {
     const unsigned int rsaBuf = RSA_size(rsaKey);
     std::vector<unsigned char> vBufRSA(rsaBuf);
@@ -248,7 +259,7 @@ bool Cerberus::_encryptFile()
 
     vAppend.push_back(AES_ENC_OPT_RSA);
   }
-  else
+  else if (ucKeyManagementOpt == AES_ENC_OPT_KEY)
   {
     if (!bDetachHeader)
     {
@@ -271,6 +282,10 @@ bool Cerberus::_encryptFile()
     vAppend.insert(vAppend.end(), vSalt.begin(), vSalt.end());
 
     vAppend.push_back(AES_ENC_OPT_KEY);
+  }
+  else
+  {
+    // TODO: ECC
   }
 
   if (bDetachHeader)
@@ -311,7 +326,7 @@ bool Cerberus::_decryptFile()
   unsigned long long ullProcessedBytes = 0;
   unsigned short usRsaPayloadSize = 0;
   bool bIsTagDetached = false;
-  bool bIsEncryptedWithRsa = true;
+  unsigned char ucEncOpt = 0xff;
   std::vector<unsigned char> vKey, vIv, vAppend, vTmp, vTag;
 
   fdIn = utils::OpenFile(sIn, flagsRead, llFileSize);
@@ -376,16 +391,16 @@ bool Cerberus::_decryptFile()
     return false;
   }
 
-  if (vTmp[0] != AES_ENC_OPT_KEY && vTmp[0] != AES_ENC_OPT_RSA)
+  ucEncOpt = vTmp[0];
+
+  if (ucEncOpt != AES_ENC_OPT_RSA && ucEncOpt != AES_ENC_OPT_KEY && ucEncOpt != AES_ENC_OPT_ECC)
   {
     printf("Key management metadata opcode is invalid\n");
     utils::CloseFile(fdIn);
     return false;
   }
 
-  bIsEncryptedWithRsa = vTmp[0] == AES_ENC_OPT_RSA ? true : false;
-
-  if (bIsEncryptedWithRsa)
+  if (ucEncOpt == AES_ENC_OPT_RSA)
   {
     if (rsaKey == NULL)
     {
@@ -457,7 +472,7 @@ bool Cerberus::_decryptFile()
     }
 
   }
-  else
+  else if (ucEncOpt == AES_ENC_OPT_KEY)
   {
     if (llFileSize <= ARGON2_METADATA_SIZE + AES_KEY_OPCODE_SIZE + AES_TAG_OPCODE_SIZE + AES_SIGNATURE_SIZE)
     {
@@ -539,6 +554,10 @@ bool Cerberus::_decryptFile()
       utils::CloseFile(fdIn);
       return false;
     }
+  }
+  else
+  {
+    // TODO: ECC
   }
 
   utils::CloseFile(fdIn);

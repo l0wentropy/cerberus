@@ -559,6 +559,8 @@ int main(int argc, char **argv)
     RSA_free(rsaKey);
   }
 
+  cerberObj.reset();
+
   printf("\n* File [%s] is %s and saved to [%s]\n", strInputFilePath.c_str(), bIsEncrypt ? "encrypted" : "decrypted", strOutputFilePath.c_str());
 
   return 0;

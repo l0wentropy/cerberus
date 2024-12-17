@@ -59,7 +59,9 @@ public:
   bool decryptFile();
   void processWithRsa();
   void processWithKeys();
+  void ProcessWithEcc();
   void setInOutPaths(const std::string &_sIn, const std::string &_sOut);
+  void unsetInOutPaths();
   void setRsaKey(RSA *_rsaKey);
   void setPassphrase(const std::vector<unsigned char> &_vPassphraseBytes);
   void setKeyFileData(const std::vector<unsigned char> &_vKeyFileBytes);
@@ -71,11 +73,12 @@ public:
   void attachTag();
   void setForce();
   void unsetForce();
+  void reset();
 
   ~Cerberus();
 
 private:
-  bool bProcessWithRsa = true;
+  unsigned char ucKeyManagementOpt = AES_ENC_OPT_RSA;
   bool bDetachHeader = false;
   bool bForce = false;
 
@@ -87,10 +90,10 @@ private:
   RSA *rsaKey = NULL;
   unsigned char ucArgonVariant = ARGON2ID_VAR;
   unsigned int uiArgonIterations = ARGON2_DEFAULT_ITERATIONS;
-  unsigned int uiArgonThreads = ARGON2_DEFAULT_ITERATIONS;
+  unsigned int uiArgonThreads = ARGON2_DEFAULT_THREADS;
   unsigned char ucArgonMemory = ARGON2_DEFAULT_MEM_DEGREE;
 
-  void reset();
+  void _reset();
   bool _encryptFile();
   bool _decryptFile();
   bool deriveAesKeys(const std::vector<unsigned char> &_vSecretSequence, const std::vector<unsigned char> &_vSalt, std::vector<unsigned char> &_vKey, std::vector<unsigned char> &_vIv);
