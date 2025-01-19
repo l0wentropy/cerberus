@@ -23,6 +23,11 @@ bool Cerberus::encryptFile()
     printf("RSA key is not loaded\n");
     return false;
   }
+  else if (ucKeyManagementOpt == AES_ENC_OPT_ECC && ecKey == NULL)
+  {
+    printf("EC key is not loaded\n");
+    return false;
+  }
   else if (ucKeyManagementOpt == AES_ENC_OPT_KEY && vPassphraseBytes.empty() && vKeyFileBytes.empty())
   {
     printf("Either passphrase or key file data must be loaded\n");
@@ -44,6 +49,11 @@ bool Cerberus::decryptFile()
     printf("RSA key is not loaded\n");
     return false;
   }
+  else if (ucKeyManagementOpt == AES_ENC_OPT_ECC && ecKey == NULL)
+  {
+    printf("EC key is not loaded\n");
+    return false;
+  }
   else if (ucKeyManagementOpt == AES_ENC_OPT_KEY && vPassphraseBytes.empty() && vKeyFileBytes.empty())
   {
     printf("Either passphrase or key file data must be loaded\n");
@@ -63,7 +73,7 @@ void Cerberus::processWithKeys()
   ucKeyManagementOpt = AES_ENC_OPT_KEY;
 }
 
-void Cerberus::ProcessWithEcc()
+void Cerberus::processWithEcc()
 {
   ucKeyManagementOpt = AES_ENC_OPT_ECC;
 }
@@ -74,7 +84,6 @@ void Cerberus::setInOutPaths(const std::string &_sIn, const std::string &_sOut)
   sOut = _sOut;
 }
 
-
 void Cerberus::unsetInOutPaths()
 {
   sIn.clear();
@@ -84,6 +93,16 @@ void Cerberus::unsetInOutPaths()
 void Cerberus::setRsaKey(RSA *_rsaKey)
 {
   rsaKey = _rsaKey;
+}
+
+bool Cerberus::setEcKey(EC_KEY *_ecKey)
+{
+  // TODO: move openssl api to utils
+  ecKey = _ecKey;
+  ecGroup = (EC_GROUP*)EC_KEY_get0_group(ecKey);
+  iEcPointCapacity = ((EC_GROUP_get_degree(ecGroup) + 7) / 8);
+
+  return utils::ecPubToBin(ecKey, iEcGroup, vEcPub);
 }
 
 void Cerberus::setPassphrase(const std::vector<unsigned char> &_vPassphraseBytes)
@@ -99,6 +118,15 @@ void Cerberus::setKeyFileData(const std::vector<unsigned char> &_vKeyFileBytes)
 void Cerberus::unsetRsaKey()
 {
   rsaKey = NULL;
+}
+
+void Cerberus::unsetEcKey()
+{
+  ecKey = NULL;
+  ecGroup = NULL;
+  iEcPointCapacity = 0;
+  iEcGroup = 0;
+  vEcPub.clear();
 }
 
 void Cerberus::unsetPassphrase()
@@ -153,11 +181,12 @@ Cerberus::~Cerberus()
 
 void Cerberus::_reset()
 {
-  ucKeyManagementOpt = AES_ENC_OPT_RSA;
+  processWithRsa();
   attachTag();
   unsetForce();
   unsetInOutPaths();
   unsetRsaKey();
+  unsetEcKey();
   unsetPassphrase();
   unsetKeyFileData();
   setArgonParams(ARGON2ID_VAR, ARGON2_DEFAULT_ITERATIONS, ARGON2_DEFAULT_THREADS, ARGON2_DEFAULT_MEM_DEGREE);
@@ -168,7 +197,7 @@ bool Cerberus::_encryptFile()
   unsigned long long ullProcessedBytes = 0;
   std::vector<unsigned char> vSalt(ARGON2_DEFAULT_SALT_SIZE);
   std::vector<unsigned char> vKey(AES256_KEY_SIZE, 0), vIv(IV_SIZE, 0), vTag(TAG_SIZE, 0);
-  std::vector<unsigned char> vAppend;
+  std::vector<unsigned char> vEcEphemeral, vAppend;
   const mode_t flagsWrite = O_WRONLY | O_APPEND;
 
   if (ucKeyManagementOpt == AES_ENC_OPT_RSA)
@@ -179,7 +208,7 @@ bool Cerberus::_encryptFile()
       return false;
     }
   }
-  else if (ucKeyManagementOpt == AES_ENC_OPT_KEY)
+  else if (ucKeyManagementOpt == AES_ENC_OPT_KEY || ucKeyManagementOpt == AES_ENC_OPT_ECC)
   {
     if (!utils::genRandBytes(vSalt, vSalt.size()))
     {
@@ -187,8 +216,61 @@ bool Cerberus::_encryptFile()
       return false;
     }
 
-    std::vector<unsigned char> vSecretSequence(vPassphraseBytes.begin(), vPassphraseBytes.end());
-    vSecretSequence.insert(vSecretSequence.end(), vKeyFileBytes.begin(), vKeyFileBytes.end());
+    std::vector<unsigned char> vSecretSequence;
+
+    if (ucKeyManagementOpt == AES_ENC_OPT_KEY)
+    {
+      vSecretSequence = vPassphraseBytes;
+      vSecretSequence.insert(vSecretSequence.end(), vKeyFileBytes.begin(), vKeyFileBytes.end());
+
+      if (!vPassphraseBytes.empty())
+      {
+        printf("Passphrase used\n");
+      }
+      if (!vKeyFileBytes.empty())
+      {
+        printf("Key file used\n");
+      }
+    }
+    else
+    {
+      if (!utils::eciesTXGenerateSymKey(iEcGroup, vEcPub, vEcEphemeral, vSecretSequence))
+      {
+        printf("Cannot generate TX symmetric key\n");
+        return false;
+      }
+
+      if (vEcEphemeral.size() > EC_EPHEMERAL_KEY_PADDED_SIZE)
+      {
+        // TODO: ...
+        printf("EC ephemeral key too long\n");
+        return false;
+      }
+
+      const unsigned int uiPadded = EC_EPHEMERAL_KEY_PADDED_SIZE - vEcEphemeral.size();
+      if (uiPadded)
+      {
+        std::vector<unsigned char> vPadding(uiPadded);
+        if (!utils::genRandBytes(vPadding, vPadding.size()))
+        {
+          printf("Cannot generate random bytes for padding\n");
+          return false;
+        }
+
+        vEcEphemeral.insert(vEcEphemeral.end(), vPadding.begin(), vPadding.end());
+      }
+
+      printf("ECIES:");
+      printf("\n\t");
+      printf("Curve [%s]", OBJ_nid2sn(iEcGroup));
+      printf("\n\t");
+      printf("Affiliate point size [%d]", vSecretSequence.size());
+      printf("\n\t");
+      printf("EC ephemeral key size [%d] (padded [%d])", vEcEphemeral.size() - uiPadded, vEcEphemeral.size());
+      
+      printf("\n\t");
+      printf("\n");
+    }
 
     printf("Argon2 options:");
     printf("\n\t");
@@ -209,17 +291,13 @@ bool Cerberus::_encryptFile()
     printf("\n\t");
     printf("Threads [%d]", uiArgonThreads);
     printf("\n\t");
-    printf("Memory [%llu KiB]\n", (unsigned long long)((unsigned long long)(1 << ucArgonMemory) * 1024) / 1024);
+    printf("Memory [%lu MiB]\n", (unsigned long)((1 << ucArgonMemory) * 1024) / 1024);
 
     printf("Deriving keys...\n");
     if (!deriveAesKeys(vSecretSequence, vSalt, vKey, vIv))
     {
       return false;
     }
-  }
-  else
-  {
-    // TODO: ECC
   }
 
   printf("Encryption...\n");
@@ -259,7 +337,7 @@ bool Cerberus::_encryptFile()
 
     vAppend.push_back(AES_ENC_OPT_RSA);
   }
-  else if (ucKeyManagementOpt == AES_ENC_OPT_KEY)
+  else if (ucKeyManagementOpt == AES_ENC_OPT_KEY || ucKeyManagementOpt == AES_ENC_OPT_ECC)
   {
     if (!bDetachHeader)
     {
@@ -281,11 +359,12 @@ bool Cerberus::_encryptFile()
 
     vAppend.insert(vAppend.end(), vSalt.begin(), vSalt.end());
 
-    vAppend.push_back(AES_ENC_OPT_KEY);
-  }
-  else
-  {
-    // TODO: ECC
+    if (ucKeyManagementOpt == AES_ENC_OPT_ECC)
+    {
+      vAppend.insert(vAppend.end(), vEcEphemeral.begin(), vEcEphemeral.end());
+    }
+
+    ucKeyManagementOpt == AES_ENC_OPT_KEY ? vAppend.push_back(AES_ENC_OPT_KEY) : vAppend.push_back(AES_ENC_OPT_ECC);
   }
 
   if (bDetachHeader)
@@ -303,9 +382,9 @@ bool Cerberus::_encryptFile()
     vAppend.push_back(AES_ENC_OPT_TAG_ATTACHED);
   }
 
-  for (unsigned int i = 0; i < AES_SIGNATURE_SIZE; ++i)
+  for (unsigned int i = 0; i < CERBERUS_SIGNATURE_SIZE; ++i)
   {
-    vAppend.push_back(AES_FILE_SIGNATURE[i]);
+    vAppend.push_back(CERBERUS_FILE_SIGNATURE[i]);
   }
 
   if (!utils::WriteFile(sOut, vAppend, flagsWrite))
@@ -335,26 +414,26 @@ bool Cerberus::_decryptFile()
     printf("Error open input file [%s]\n", sIn.c_str());
     return false;
   }
-  if (llFileSize <= AES_KEY_OPCODE_SIZE + AES_TAG_OPCODE_SIZE + AES_SIGNATURE_SIZE)
+  if (llFileSize <= AES_KEY_OPCODE_SIZE + AES_TAG_OPCODE_SIZE + CERBERUS_SIGNATURE_SIZE)
   {
     printf("Input file seems to be corrupted [%s]\n", sIn.c_str());
     utils::CloseFile(fdIn);
     return false;
   }
 
-  vTmp.resize(AES_SIGNATURE_SIZE, 0);
-  utils::SetSeekFileOffset(fdIn, llFileSize - AES_SIGNATURE_SIZE);
+  vTmp.resize(CERBERUS_SIGNATURE_SIZE, 0);
+  utils::SetSeekFileOffset(fdIn, llFileSize - CERBERUS_SIGNATURE_SIZE);
 
-  if (utils::ReadFileChunk(fdIn, AES_SIGNATURE_SIZE, vTmp) != AES_SIGNATURE_SIZE)
+  if (utils::ReadFileChunk(fdIn, CERBERUS_SIGNATURE_SIZE, vTmp) != CERBERUS_SIGNATURE_SIZE)
   {
     printf("Error read signature [%s]\n", sIn.c_str());
     utils::CloseFile(fdIn);
     return false;
   }
 
-  for (unsigned int i = 0; i < AES_SIGNATURE_SIZE; ++i)
+  for (unsigned int i = 0; i < CERBERUS_SIGNATURE_SIZE; ++i)
   {
-    if (AES_FILE_SIGNATURE[i] != vTmp[i])
+    if (CERBERUS_FILE_SIGNATURE[i] != vTmp[i])
     {
       printf("Signature is not found [%s]\n", sIn.c_str());
       utils::CloseFile(fdIn);
@@ -363,7 +442,7 @@ bool Cerberus::_decryptFile()
   }
 
   vTmp.resize(AES_TAG_OPCODE_SIZE, 0);
-  utils::SetSeekFileOffset(fdIn, llFileSize - (AES_TAG_OPCODE_SIZE + AES_SIGNATURE_SIZE));
+  utils::SetSeekFileOffset(fdIn, llFileSize - (AES_TAG_OPCODE_SIZE + CERBERUS_SIGNATURE_SIZE));
 
   if (utils::ReadFileChunk(fdIn, AES_TAG_OPCODE_SIZE, vTmp) != AES_TAG_OPCODE_SIZE)
   {
@@ -382,7 +461,7 @@ bool Cerberus::_decryptFile()
   bIsTagDetached = vTmp[0] == AES_ENC_OPT_TAG_DETACHED ? true : false;
 
   vTmp.resize(AES_KEY_OPCODE_SIZE, 0);
-  utils::SetSeekFileOffset(fdIn, llFileSize - (AES_KEY_OPCODE_SIZE + AES_TAG_OPCODE_SIZE + AES_SIGNATURE_SIZE));
+  utils::SetSeekFileOffset(fdIn, llFileSize - (AES_KEY_OPCODE_SIZE + AES_TAG_OPCODE_SIZE + CERBERUS_SIGNATURE_SIZE));
 
   if (utils::ReadFileChunk(fdIn, AES_KEY_OPCODE_SIZE, vTmp) != AES_KEY_OPCODE_SIZE)
   {
@@ -402,13 +481,7 @@ bool Cerberus::_decryptFile()
 
   if (ucEncOpt == AES_ENC_OPT_RSA)
   {
-    if (rsaKey == NULL)
-    {
-      printf("RSA key is not loaded\n");
-      utils::CloseFile(fdIn);
-      return false;
-    }
-    if (llFileSize <= RSA_METADATA_SIZE + AES_KEY_OPCODE_SIZE + AES_TAG_OPCODE_SIZE + AES_SIGNATURE_SIZE)
+    if (llFileSize <= RSA_METADATA_SIZE + AES_KEY_OPCODE_SIZE + AES_TAG_OPCODE_SIZE + CERBERUS_SIGNATURE_SIZE)
     {
       printf("Input file seems to be corrupted [%s]\n", sIn.c_str());
       utils::CloseFile(fdIn);
@@ -416,7 +489,7 @@ bool Cerberus::_decryptFile()
     }
 
     vTmp.resize(RSA_METADATA_SIZE, 0);
-    utils::SetSeekFileOffset(fdIn, llFileSize - (RSA_METADATA_SIZE + AES_KEY_OPCODE_SIZE + AES_TAG_OPCODE_SIZE + AES_SIGNATURE_SIZE));
+    utils::SetSeekFileOffset(fdIn, llFileSize - (RSA_METADATA_SIZE + AES_KEY_OPCODE_SIZE + AES_TAG_OPCODE_SIZE + CERBERUS_SIGNATURE_SIZE));
 
     if (utils::ReadFileChunk(fdIn, RSA_METADATA_SIZE, vTmp) != RSA_METADATA_SIZE)
     {
@@ -429,7 +502,7 @@ bool Cerberus::_decryptFile()
     usRsaPayloadSize <<= 8;
     usRsaPayloadSize |= vTmp[1];
 
-    if (llFileSize <= usRsaPayloadSize + RSA_METADATA_SIZE + AES_KEY_OPCODE_SIZE + AES_TAG_OPCODE_SIZE + AES_SIGNATURE_SIZE)
+    if (llFileSize <= usRsaPayloadSize + RSA_METADATA_SIZE + AES_KEY_OPCODE_SIZE + AES_TAG_OPCODE_SIZE + CERBERUS_SIGNATURE_SIZE)
     {
       printf("Input file seems to be corrupted [%s]\n", sIn.c_str());
       utils::CloseFile(fdIn);
@@ -437,7 +510,7 @@ bool Cerberus::_decryptFile()
     }
 
     vTmp.resize(usRsaPayloadSize, 0);
-    llReadLimit = llFileSize - (usRsaPayloadSize + RSA_METADATA_SIZE + AES_KEY_OPCODE_SIZE + AES_TAG_OPCODE_SIZE + AES_SIGNATURE_SIZE);
+    llReadLimit = llFileSize - (usRsaPayloadSize + RSA_METADATA_SIZE + AES_KEY_OPCODE_SIZE + AES_TAG_OPCODE_SIZE + CERBERUS_SIGNATURE_SIZE);
     utils::SetSeekFileOffset(fdIn, llReadLimit);
 
     if (utils::ReadFileChunk(fdIn, usRsaPayloadSize, vTmp) != usRsaPayloadSize)
@@ -472,20 +545,26 @@ bool Cerberus::_decryptFile()
     }
 
   }
-  else if (ucEncOpt == AES_ENC_OPT_KEY)
+  else if (ucEncOpt == AES_ENC_OPT_KEY || ucEncOpt == AES_ENC_OPT_ECC)
   {
-    if (llFileSize <= ARGON2_METADATA_SIZE + AES_KEY_OPCODE_SIZE + AES_TAG_OPCODE_SIZE + AES_SIGNATURE_SIZE)
+    unsigned int uiMetaSize = ARGON2_METADATA_SIZE;
+    if (ucEncOpt == AES_ENC_OPT_ECC)
+    {
+      uiMetaSize = ECIES_METADATA_SIZE;
+    }
+
+    if (llFileSize <= uiMetaSize + AES_KEY_OPCODE_SIZE + AES_TAG_OPCODE_SIZE + CERBERUS_SIGNATURE_SIZE)
     {
       printf("Input file seems to be corrupted [%s]\n", sIn.c_str());
       utils::CloseFile(fdIn);
       return false;
     }
 
-    vTmp.resize(ARGON2_METADATA_SIZE, 0);
-    llReadLimit = llFileSize - (ARGON2_METADATA_SIZE + AES_KEY_OPCODE_SIZE + AES_TAG_OPCODE_SIZE + AES_SIGNATURE_SIZE);
+    vTmp.resize(uiMetaSize, 0);
+    llReadLimit = llFileSize - (uiMetaSize + AES_KEY_OPCODE_SIZE + AES_TAG_OPCODE_SIZE + CERBERUS_SIGNATURE_SIZE);
     utils::SetSeekFileOffset(fdIn, llReadLimit);
 
-    if (utils::ReadFileChunk(fdIn, ARGON2_METADATA_SIZE, vTmp) != ARGON2_METADATA_SIZE)
+    if (utils::ReadFileChunk(fdIn, uiMetaSize, vTmp) != uiMetaSize)
     {
       printf("Error read Argon2 metadata [%s]\n", sIn.c_str());
       utils::CloseFile(fdIn);
@@ -500,11 +579,42 @@ bool Cerberus::_decryptFile()
       ucArgonMemory = vTmp[9];
     }
 
-    const std::vector<unsigned char> vSalt(vTmp.begin() + (vTmp.size() - ARGON2_DEFAULT_SALT_SIZE), vTmp.end());
+    // TODO: for tomorrow...
+    std::vector<unsigned char> vSecretSequence, vSalt, vEcEphemeral;
+
+    if (ucEncOpt == AES_ENC_OPT_KEY)
+    {
+      vSalt.insert(vSalt.end(), vTmp.begin() + (vTmp.size() - ARGON2_DEFAULT_SALT_SIZE), vTmp.end());
+      vSecretSequence = vPassphraseBytes;
+      vSecretSequence.insert(vSecretSequence.end(), vKeyFileBytes.begin(), vKeyFileBytes.end());
+    }
+    else
+    {
+      vSalt.insert(vSalt.end(), vTmp.begin() + (vTmp.size() - (ARGON2_DEFAULT_SALT_SIZE + EC_EPHEMERAL_KEY_PADDED_SIZE)), vTmp.end() - EC_EPHEMERAL_KEY_PADDED_SIZE);
+      vEcEphemeral.insert(vEcEphemeral.end(), vTmp.begin() + (vTmp.size() - EC_EPHEMERAL_KEY_PADDED_SIZE), vTmp.end());
+      vEcEphemeral.resize(vEcPub.size());
+
+      if (!utils::eciesRXGenerateSymKey(ecKey, vEcEphemeral, vSecretSequence))
+      {
+        printf("Cannot generate RX symmetric key\n");
+        return false;
+      }
+
+      printf("ECIES:");
+      printf("\n\t");
+      printf("Curve [%s]", OBJ_nid2sn(iEcGroup));
+      printf("\n\t");
+      printf("Affiliate point size [%d]", vSecretSequence.size());
+      printf("\n\t");
+      printf("EC ephemeral key size [%d])", vEcEphemeral.size());
+      
+      printf("\n\t");
+      printf("\n");
+    }
 
     if (!bIsTagDetached)
     {
-      if (llFileSize <= TAG_SIZE + ARGON2_METADATA_SIZE + AES_KEY_OPCODE_SIZE + AES_TAG_OPCODE_SIZE + AES_SIGNATURE_SIZE)
+      if (llFileSize <= TAG_SIZE + uiMetaSize + AES_KEY_OPCODE_SIZE + AES_TAG_OPCODE_SIZE + CERBERUS_SIGNATURE_SIZE)
       {
         printf("Input file seems to be corrupted [%s]\n", sIn.c_str());
         utils::CloseFile(fdIn);
@@ -512,7 +622,7 @@ bool Cerberus::_decryptFile()
       }
 
       vTmp.resize(TAG_SIZE, 0);
-      llReadLimit = llFileSize - (TAG_SIZE + ARGON2_METADATA_SIZE + AES_KEY_OPCODE_SIZE + AES_TAG_OPCODE_SIZE + AES_SIGNATURE_SIZE);
+      llReadLimit = llFileSize - (TAG_SIZE + uiMetaSize + AES_KEY_OPCODE_SIZE + AES_TAG_OPCODE_SIZE + CERBERUS_SIGNATURE_SIZE);
       utils::SetSeekFileOffset(fdIn, llReadLimit);
 
       if (utils::ReadFileChunk(fdIn, TAG_SIZE, vTmp) != TAG_SIZE)
@@ -543,10 +653,7 @@ bool Cerberus::_decryptFile()
     printf("\n\t");
     printf("Threads [%d]", uiArgonThreads);
     printf("\n\t");
-    printf("Memory [%llu KiB]\n", (unsigned long long)((unsigned long long)(1 << ucArgonMemory) * 1024) / 1024);
-
-    std::vector<unsigned char> vSecretSequence(vPassphraseBytes.begin(), vPassphraseBytes.end());
-    vSecretSequence.insert(vSecretSequence.end(), vKeyFileBytes.begin(), vKeyFileBytes.end());
+    printf("Memory [%lu MiB]\n", (unsigned long)((1 << ucArgonMemory) * 1024) / 1024);
 
     printf("Deriving keys...\n");
     if (!deriveAesKeys(vSecretSequence, vSalt, vKey, vIv))
@@ -554,10 +661,6 @@ bool Cerberus::_decryptFile()
       utils::CloseFile(fdIn);
       return false;
     }
-  }
-  else
-  {
-    // TODO: ECC
   }
 
   utils::CloseFile(fdIn);
@@ -617,3 +720,4 @@ bool Cerberus::deriveAesKeys(const std::vector<unsigned char> &_vSecretSequence,
 
   return true;
 }
+

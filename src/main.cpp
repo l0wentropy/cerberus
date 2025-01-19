@@ -14,46 +14,45 @@
 
 #define MAX_PWD_READ_LEN  4096
 
-#define _HEADER_USAGE_  "Encryption: "                                                                              \
-                        "\n\t"                                                                                      \
-                        "cerberus --encrypt --in file.in --out file.out --rsa-public rsa_pub.pem"                   \
-                        "\n\t"                                                                                      \
-                        "cerberus --encrypt --in file.in --out file.out --pwd --key-file file.key"                  \
-                        "\n\n"                                                                                      \
-                        "Decryption: "                                                                              \
-                        "\n\t"                                                                                      \
-                        "cerberus --decrypt --in file.in --out file.out --rsa-private rsa_private.pem"              \
-                        "\n\t"                                                                                      \
-                        "cerberus --decrypt --in file.in --out file.out --pwd"                                      \
-                        "\n\t"                                                                                      \
-                        "\n\n"                                                                                      \
-                        "Argon2 options:"                                                                           \
-                        "\n\t"                                                                                      \
-                        "--argon2-variant argon2i/argon2d/argon2id (default)"                                       \
-                        "\n\t"                                                                                      \
-                        "--iterations 1 to 2^32−1 (16 default)"                                                     \
-                        "\n\t"                                                                                      \
-                        "--threads 1 to 2^24−1 (degree of parallelism, 4 default)"                                  \
-                        "\n\t"                                                                                      \
-                        "--memory 1 to 32 (memory usage of 2^N KiB, default 20)"                                    \
-                        "\n\n\t"                                                                                    \
-                        "Argon2 options are omitted with decryption process as those will be taken from encrypted " \
-                        "file metadata."                                                                            \
-                        "\n\t"                                                                                      \
-                        "In case any reason to force using other than stored values add --force flag"               \
-                        "\n\n"                                                                                      \
-                        "Attach/detach AES-GCM verification tag:"                                                   \
-                        "\n\t"                                                                                      \
-                        "--tag file.tag"                                                                            \
-                        "\n\n\t"                                                                                    \
-                        "Add --force flag in order to skip tag verification"                                        \
+#define _HEADER_USAGE_  "Encryption: "                                                                                          \
+                        "\n\t"                                                                                                  \
+                        "cerberus --encrypt --in file.in --out file.out --ec-public ec_pub.pem --argon2-variant argon2d"        \
+                        "\n\t"                                                                                                  \
+                        "cerberus --encrypt --in file.in --out file.out --pwd --key-file file.key"                              \
+                        "\n\n"                                                                                                  \
+                        "Decryption: "                                                                                          \
+                        "\n\t"                                                                                                  \
+                        "cerberus --decrypt --in file.in --out file.out --rsa-private rsa_private.pem --key-file rsa_pem.pwd"   \
+                        "\n\t"                                                                                                  \
+                        "cerberus --decrypt --in file.in --out file.out --pwd"                                                  \
+                        "\n\t"                                                                                                  \
+                        "\n\n"                                                                                                  \
+                        "Argon2 options:"                                                                                       \
+                        "\n\t"                                                                                                  \
+                        "--argon2-variant argon2i/argon2d/argon2id (default)"                                                   \
+                        "\n\t"                                                                                                  \
+                        "--iterations 1 to 2^32−1 (16 default)"                                                                 \
+                        "\n\t"                                                                                                  \
+                        "--threads 1 to 2^24−1 (degree of parallelism, 4 default)"                                              \
+                        "\n\t"                                                                                                  \
+                        "--memory 1 to 32 (memory usage of 2^N KiB, default 20)"                                                \
+                        "\n\n\t"                                                                                                \
+                        "Argon2 options are omitted with decryption process as those will be taken from encrypted "             \
+                        "file metadata."                                                                                        \
+                        "\n\t"                                                                                                  \
+                        "In case any reason to force using other than stored values add --force flag"                           \
+                        "\n\n"                                                                                                  \
+                        "Attach/detach AES-GCM verification tag:"                                                               \
+                        "\n\t"                                                                                                  \
+                        "--tag file.tag"                                                                                        \
+                        "\n\n\t"                                                                                                \
+                        "Add --force flag in order to skip tag verification"                                                    \
 
 void printHelp()
 {
-  printf("Cerberus v%s powered by kernelp4n1c (2024)\n\n", _CERBERUS_VERSION);
+  printf("Cerberus v%s powered by kernelp4n1c (2025)\n\n", _CERBERUS_VERSION);
   printf("AES256-GCM encryption tool\n");
-//  printf("Keys management: RSA, Elliptic Curves (ECIES), Argon2\n");
-  printf("Keys management: RSA, Argon2\n");
+  printf("Keys management: RSA, Elliptic Curves (ECIES), Argon2\n");
   printf("Built against: OpenSSL, Argon2 shared libs\n");
   printf("\n");
   printf("%s\n", _HEADER_USAGE_);
@@ -99,6 +98,8 @@ int main(int argc, char **argv)
   const std::string strParOut = "out";
   const std::string strRsaPub = "rsa-public";
   const std::string strRsaPriv = "rsa-private";
+  const std::string strEcPub = "ec-public";
+  const std::string strEcPriv = "ec-private";
   const std::string strPwd = "pwd";
   const std::string strKeyFile = "key-file";
   const std::string strArgon2Variant = "argon2-variant";
@@ -108,13 +109,14 @@ int main(int argc, char **argv)
   const std::string strTag = "tag";
   const std::string strForce = "force";
 
-  const std::vector<std::string> vCmdOptions = {strParEncrypt, strParDecrypt, strParIn, strParOut, strRsaPub, strRsaPriv, strPwd, strKeyFile,
+  const std::vector<std::string> vCmdOptions = {strParEncrypt, strParDecrypt, strParIn, strParOut, strRsaPub, strRsaPriv, strEcPub, strEcPriv, strPwd, strKeyFile,
     strArgon2Variant, strArgon2Iterations, strArgon2Threads, strArgon2Memory, strTag, strForce};
 
   bool bDirection = false;
   bool bKeyOpt = false;
   bool bIsEncrypt = true;
   bool bIsRsa = false;
+  bool bIsEcc = false;
   bool bIsPwd = false;
   bool bIsKeyFile = false;
   bool bIsTag = false;
@@ -123,19 +125,21 @@ int main(int argc, char **argv)
   std::string strInputFilePath;
   std::string strOutputFilePath;
   std::string strRsaKeyFilePath;
+  std::string strEcKeyFilePath;
   std::string strKeyFilePath;
   std::string strTagFilePath;
 
   RSA *rsaKey = NULL;
+  EC_KEY *ecKey = NULL;
   bool bIsMemZeroed = false;
   unsigned char *ucPtr = NULL;
   size_t uiMaxPwdLen = MAX_PWD_READ_LEN;
   std::vector<unsigned char> vPassphrase, vKeyFile;
 
-  unsigned char ucArgonVariant = ARGON2ID_VAR;
-  unsigned int uiArgonIterations = ARGON2_DEFAULT_ITERATIONS;
-  unsigned int uiArgonThreads = ARGON2_DEFAULT_THREADS;
-  unsigned char ucArgonMemory = ARGON2_DEFAULT_MEM_DEGREE;
+  unsigned char   ucArgonVariant      = ARGON2ID_VAR;
+  unsigned int    uiArgonIterations   = ARGON2_DEFAULT_ITERATIONS;
+  unsigned int    uiArgonThreads      = ARGON2_DEFAULT_THREADS;
+  unsigned char   ucArgonMemory       = ARGON2_DEFAULT_MEM_DEGREE;
 
   for (int i = 0; i < argc; ++i)
   {
@@ -176,7 +180,7 @@ int main(int argc, char **argv)
     }
     if (argv[i] == strParPrefix + strRsaPub || argv[i] == strParPrefix + strRsaPriv)
     {
-      if (!bDirection || bIsPwd || bIsKeyFile || bKeyOpt || bIsRsa)
+      if (!bDirection || bKeyOpt)
       {
         printHelp();
         return argc;
@@ -201,28 +205,53 @@ int main(int argc, char **argv)
       strRsaKeyFilePath = argv[i + 1];
       continue;
     }
-    if (argv[i] == strParPrefix + strPwd || argv[i] == strParPrefix + strKeyFile)
+    if (argv[i] == strParPrefix + strEcPub || argv[i] == strParPrefix + strEcPriv)
     {
-      if (!bDirection || bIsRsa)
+      if (!bDirection || bKeyOpt)
       {
         printHelp();
         return argc;
       }
-      if (!bIsPwd && argv[i] == strParPrefix + strPwd)
+      if (argv[i] == strParPrefix + strEcPub && !bIsEncrypt)
       {
-        bIsPwd = true;
+        printHelp();
+        return argc;
       }
-      else if (!bIsKeyFile && argv[i] == strParPrefix + strKeyFile)
+      else if (argv[i] == strParPrefix + strEcPriv && bIsEncrypt)
       {
-        if (i + 1 > argc)
-        {
-          printHelp();
-          return argc;
-        }
-        bIsKeyFile = true;
-        strKeyFilePath = argv[i + 1];
+        printHelp();
+        return argc;
       }
+      if (i + 1 > argc)
+      {
+        printHelp();
+        return argc;
+      }
+      bIsEcc = true;
       bKeyOpt = true;
+      strEcKeyFilePath = argv[i + 1];
+      continue;
+    }
+    if (argv[i] == strParPrefix + strPwd)
+    {
+      if (bKeyOpt)
+      {
+        printHelp();
+        return argc;
+      }
+      bIsPwd = true;
+      bKeyOpt = true;
+      continue;
+    }
+    if (argv[i] == strParPrefix + strKeyFile)
+    {
+      if (i + 1 > argc)
+      {
+        printHelp();
+        return argc;
+      }
+      bIsKeyFile = true;
+      strKeyFilePath = argv[i + 1];
       continue;
     }
     if (argv[i] == strParPrefix + strParIn)
@@ -245,7 +274,7 @@ int main(int argc, char **argv)
       strOutputFilePath = argv[i + 1];
       continue;
     }
-    if (argv[i] == strParPrefix + strArgon2Variant)
+    if (!bIsRsa && argv[i] == strParPrefix + strArgon2Variant)
     {
       if (i + 1 > argc)
       {
@@ -273,7 +302,7 @@ int main(int argc, char **argv)
       }
       continue;
     }
-    if (argv[i] == strParPrefix + strArgon2Iterations || argv[i] == strParPrefix + strArgon2Threads || argv[i] == strParPrefix + strArgon2Memory)
+    if (!bIsRsa && argv[i] == strParPrefix + strArgon2Iterations || argv[i] == strParPrefix + strArgon2Threads || argv[i] == strParPrefix + strArgon2Memory)
     {
       if (i + 1 > argc)
       {
@@ -328,7 +357,7 @@ int main(int argc, char **argv)
 
         if (ullRetval >= 22)
         {
-          printf("Proceed using [%llu GiB] memory? (y/n)\n", (unsigned long long)((unsigned long long)(1 << ullRetval) * 1024) / 1024 / 1024 / 1024);
+          printf("Proceed using [%lu GiB] memory? (y/n)\n", (unsigned long)((1 << ullRetval) / 1024 / 1024));
           char c = getchar();
           if (c != 'y' && c != 'Y')
           {
@@ -376,24 +405,42 @@ int main(int argc, char **argv)
     return -1;
   }
 
+  if (bIsKeyFile)
+  {
+    if (utils::IsFileExist(strKeyFilePath) == false)
+    {
+      printf("Key file not found\n");
+      return -1;
+    }
+    const unsigned long long ullKeyFileSize = utils::GetFileSize(strKeyFilePath);
+    if (ullKeyFileSize > _MAX_KEY_FILE_SIZE)
+    {
+      printf("Key file is too large\n");
+      return -1;
+    }
+    if (utils::ReadFile(strKeyFilePath, vKeyFile, ullKeyFileSize) == false)
+    {
+      printf("Cannot read key file\n");
+      return -1;
+    }
+    if (vKeyFile.empty())
+    {
+      printf("Key file is empty\n");
+      return -1;
+    }
+  }
+
   if (bIsRsa)
   {
-    std::vector<unsigned char> vRsaData;
-
     if (utils::IsFileExist(strRsaKeyFilePath) == false)
     {
       printf("RSA key file not found\n");
       return -1;
     }
-    if (utils::ReadFile(strRsaKeyFilePath, vRsaData) == false)
-    {
-      printf("Cannot read RSA key file\n");
-      return -1;
-    }
 
     if (bIsEncrypt)
     {
-      rsaKey = utils::getPubRSA(vRsaData);
+      rsaKey = utils::getPubRSA(strRsaKeyFilePath);
       if (rsaKey == NULL)
       {
         printf("RSA public key is not valid\n");
@@ -402,10 +449,51 @@ int main(int argc, char **argv)
     }
     else
     {
-      rsaKey = utils::getPrivRSA(vRsaData);
+      if (vKeyFile.empty())
+      {
+        rsaKey = utils::getPrivRSA(strRsaKeyFilePath);
+      }
+      else
+      {
+        rsaKey = utils::getPrivRSA(strRsaKeyFilePath, &vKeyFile[0]);
+      }
       if (rsaKey == NULL)
       {
         printf("RSA private key is not valid\n");
+        return -1;
+      }
+    }
+  }
+  else if (bIsEcc)
+  {
+    if (utils::IsFileExist(strEcKeyFilePath) == false)
+    {
+      printf("EC key file not found\n");
+      return -1;
+    }
+
+    if (bIsEncrypt)
+    {
+      ecKey = utils::getPubEC(strEcKeyFilePath);
+      if (ecKey == NULL)
+      {
+        printf("EC public key is not valid\n");
+        return -1;
+      }
+    }
+    else
+    {
+      if (vKeyFile.empty())
+      {
+        ecKey = utils::getPrivEC(strEcKeyFilePath);
+      }
+      else
+      {
+        ecKey = utils::getPrivEC(strEcKeyFilePath, &vKeyFile[0]);
+      }
+      if (ecKey == NULL)
+      {
+        printf("EC private key is not valid\n");
         return -1;
       }
     }
@@ -472,30 +560,6 @@ int main(int argc, char **argv)
         free(ucPtr);
       }
     }
-    if (bIsKeyFile)
-    {
-      if (utils::IsFileExist(strKeyFilePath) == false)
-      {
-        printf("Key file not found\n");
-        return -1;
-      }
-      const unsigned long long ullKeyFileSize = utils::GetFileSize(strKeyFilePath);
-      if (ullKeyFileSize > _MAX_KEY_FILE_SIZE)
-      {
-        printf("Key file is too large\n");
-        return -1;
-      }
-      if (utils::ReadFile(strKeyFilePath, vKeyFile, ullKeyFileSize) == false)
-      {
-        printf("Cannot read key file\n");
-        return -1;
-      }
-      if (vKeyFile.empty())
-      {
-        printf("Key file is empty\n");
-        return -1;
-      }
-    }
   }
   else
   {
@@ -504,21 +568,8 @@ int main(int argc, char **argv)
   }
 
   Cerberus cerberObj(strInputFilePath, strOutputFilePath);
+  cerberObj.setArgonParams(ucArgonVariant, uiArgonIterations, uiArgonThreads, ucArgonMemory);
 
-  if (bIsRsa)
-  {
-    cerberObj.setRsaKey(rsaKey);
-  }
-  else
-  {
-    cerberObj.setPassphrase(vPassphrase);
-    cerberObj.setKeyFileData(vKeyFile);
-    cerberObj.setArgonParams(ucArgonVariant, uiArgonIterations, uiArgonThreads, ucArgonMemory);
-  }
-  if (bIsForce)
-  {
-    cerberObj.setForce();
-  }
   if (bIsTag)
   {
     if (!bIsEncrypt)
@@ -529,8 +580,33 @@ int main(int argc, char **argv)
         return -1;
       }
     }
-
     cerberObj.detachTag(strTagFilePath);
+  }
+
+  if (bIsRsa)
+  {
+    cerberObj.setRsaKey(rsaKey);
+    cerberObj.processWithRsa();
+  }
+  else if (bIsEcc)
+  {
+    if (!cerberObj.setEcKey(ecKey))
+    {
+      printf("Cannot load EC key\n");
+      return -1;
+    }
+    cerberObj.processWithEcc();
+  }
+  else if (bIsPwd || bIsKeyFile)
+  {
+    cerberObj.setPassphrase(vPassphrase);
+    cerberObj.setKeyFileData(vKeyFile);
+    cerberObj.processWithKeys();
+  }
+
+  if (bIsForce)
+  {
+    cerberObj.setForce();
   }
 
   if (bIsEncrypt)
@@ -554,6 +630,7 @@ int main(int argc, char **argv)
     }
   }
 
+  // TODO: work with memory
   if (bIsRsa && rsaKey)
   {
     RSA_free(rsaKey);
