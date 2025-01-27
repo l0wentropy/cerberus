@@ -1381,8 +1381,26 @@ bool utils::gcmEncryptFileWrap(
     return false;
   }
 
-  gcm_destroy_ctx_wrap(&gcm_ctx.ctx);
+  bool bIsMemZeroed = false;
+  memset_sec(&gcm_ctx.vKey[0], gcm_ctx.vKey.size(), bIsMemZeroed);
+  if (!bIsMemZeroed)
+  {
+    #ifdef __DEBUG_ENABLED
+    LOG_WARNING("gcmEncryptFileWrap() :: AES key memory area was not properly cleaned");
+    #endif
+  }
+  
+  bIsMemZeroed = false;
+  memset_sec(&gcm_ctx.vIv[0], gcm_ctx.vIv.size(), bIsMemZeroed);
+  if (!bIsMemZeroed)
+  {
+    #ifdef __DEBUG_ENABLED
+    LOG_WARNING("gcmEncryptFileWrap() :: AES iv memory area was not properly cleaned");
+    #endif
+  }
+
   vTag = gcm_ctx.vTag;
+  gcm_destroy_ctx_wrap(&gcm_ctx.ctx);
 
   return true;
 }
@@ -1481,6 +1499,24 @@ bool utils::gcmDecryptFileWrap(
     #endif
   }
 
+  bool bIsMemZeroed = false;
+  memset_sec(&gcm_ctx.vKey[0], gcm_ctx.vKey.size(), bIsMemZeroed);
+  if (!bIsMemZeroed)
+  {
+    #ifdef __DEBUG_ENABLED
+    LOG_WARNING("gcmDecryptFileWrap() :: AES key memory area was not properly cleaned");
+    #endif
+  }
+  
+  bIsMemZeroed = false;
+  memset_sec(&gcm_ctx.vIv[0], gcm_ctx.vIv.size(), bIsMemZeroed);
+  if (!bIsMemZeroed)
+  {
+    #ifdef __DEBUG_ENABLED
+    LOG_WARNING("gcmDecryptFileWrap() :: AES iv memory area was not properly cleaned");
+    #endif
+  }
+
   gcm_destroy_ctx_wrap(&gcm_ctx.ctx);
 
   return true;
@@ -1493,7 +1529,7 @@ void utils::PBKDF2_HMAC_SHA_512(unsigned char* pass, int passlen, unsigned char*
 
 bool utils::argon2id(
   unsigned char* pass, uint32_t passlen, unsigned char* salt, uint32_t saltlen,
-  uint32_t iterations, uint32_t memoryBytes, uint32_t threads, uint32_t hashlen, unsigned char* hash,
+  uint32_t iterations, uint32_t memKibiBytes, uint32_t threads, uint32_t hashlen, unsigned char* hash,
   unsigned char* optSecret, uint32_t secretlen)
 {
   argon2_context context = {
@@ -1505,7 +1541,7 @@ bool utils::argon2id(
   saltlen, /* salt length */
   optSecret, secretlen, /* optional secret data */
   NULL, 0, /* optional associated data */
-  iterations, memoryBytes, threads, threads,
+  iterations, memKibiBytes, threads, threads,
   ARGON2_VERSION_13, /* algorithm version */
   NULL, NULL, /* custom memory allocation / deallocation functions */
   /* by default only internal memory is cleared (pwd is not wiped) */
@@ -1519,7 +1555,7 @@ bool utils::argon2id(
 
 bool utils::argon2i(
   unsigned char* pass, uint32_t passlen, unsigned char* salt, uint32_t saltlen,
-  uint32_t iterations, uint32_t memoryBytes, uint32_t threads, uint32_t hashlen, unsigned char* hash,
+  uint32_t iterations, uint32_t memKibiBytes, uint32_t threads, uint32_t hashlen, unsigned char* hash,
   unsigned char* optSecret, uint32_t secretlen)
 {
   argon2_context context = {
@@ -1531,7 +1567,7 @@ bool utils::argon2i(
   saltlen, /* salt length */
   optSecret, secretlen, /* optional secret data */
   NULL, 0, /* optional associated data */
-  iterations, memoryBytes, threads, threads,
+  iterations, memKibiBytes, threads, threads,
   ARGON2_VERSION_13, /* algorithm version */
   NULL, NULL, /* custom memory allocation / deallocation functions */
   /* by default only internal memory is cleared (pwd is not wiped) */
@@ -1545,7 +1581,7 @@ bool utils::argon2i(
 
 bool utils::argon2d(
   unsigned char* pass, uint32_t passlen, unsigned char* salt, uint32_t saltlen,
-  uint32_t iterations, uint32_t memoryBytes, uint32_t threads, uint32_t hashlen, unsigned char* hash,
+  uint32_t iterations, uint32_t memKibiBytes, uint32_t threads, uint32_t hashlen, unsigned char* hash,
   unsigned char* optSecret, uint32_t secretlen)
 {
   argon2_context context = {
@@ -1557,7 +1593,7 @@ bool utils::argon2d(
   saltlen, /* salt length */
   optSecret, secretlen, /* optional secret data */
   NULL, 0, /* optional associated data */
-  iterations, memoryBytes, threads, threads,
+  iterations, memKibiBytes, threads, threads,
   ARGON2_VERSION_13, /* algorithm version */
   NULL, NULL, /* custom memory allocation / deallocation functions */
   /* by default only internal memory is cleared (pwd is not wiped) */
