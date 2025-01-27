@@ -117,11 +117,19 @@ void Cerberus::setKeyFileData(const std::vector<unsigned char> &_vKeyFileBytes)
 
 void Cerberus::unsetRsaKey()
 {
+  if (rsaKey)
+  {
+    RSA_free(rsaKey);
+  }
   rsaKey = NULL;
 }
 
 void Cerberus::unsetEcKey()
 {
+  if (ecKey)
+  {
+    EC_KEY_free(ecKey);
+  }
   ecKey = NULL;
   ecGroup = NULL;
   iEcPointCapacity = 0;
@@ -129,14 +137,26 @@ void Cerberus::unsetEcKey()
   vEcPub.clear();
 }
 
-void Cerberus::unsetPassphrase()
+bool Cerberus::unsetPassphrase()
 {
-  vPassphraseBytes.clear();
+  bool bIsMemZeroed = false;
+  if (!vPassphraseBytes.empty())
+  {
+    utils::memset_sec(&vPassphraseBytes[0], vPassphraseBytes.size(), bIsMemZeroed);
+    vPassphraseBytes.clear();
+  }
+  return bIsMemZeroed;
 }
 
-void Cerberus::unsetKeyFileData()
+bool Cerberus::unsetKeyFileData()
 {
-  vKeyFileBytes.clear();
+  bool bIsMemZeroed = false;
+  if (!vKeyFileBytes.empty())
+  {
+    utils::memset_sec(&vKeyFileBytes[0], vKeyFileBytes.size(), bIsMemZeroed);
+    vKeyFileBytes.clear();
+  }
+  return bIsMemZeroed;
 }
 
 void Cerberus::setArgonParams(const unsigned char &_ucVariant, const unsigned int &_uiIterations, const unsigned int &_uiThreads, const unsigned char &_ucMemory)
@@ -194,6 +214,7 @@ void Cerberus::_reset()
 
 bool Cerberus::_encryptFile()
 {
+  bool bIsMemZeroed = false;
   unsigned long long ullProcessedBytes = 0;
   std::vector<unsigned char> vSalt(ARGON2_DEFAULT_SALT_SIZE);
   std::vector<unsigned char> vKey(AES256_KEY_SIZE, 0), vIv(IV_SIZE, 0), vTag(TAG_SIZE, 0);
@@ -264,9 +285,9 @@ bool Cerberus::_encryptFile()
       printf("\n\t");
       printf("Curve [%s]", OBJ_nid2sn(iEcGroup));
       printf("\n\t");
-      printf("Affiliate point size [%d]", vSecretSequence.size());
+      printf("Affiliate point size [%lu]", vSecretSequence.size());
       printf("\n\t");
-      printf("EC ephemeral key size [%d] (padded [%d])", vEcEphemeral.size() - uiPadded, vEcEphemeral.size());
+      printf("EC ephemeral key size [%lu] (padded [%lu])", vEcEphemeral.size() - uiPadded, vEcEphemeral.size());
       
       printf("\n\t");
       printf("\n");
@@ -291,12 +312,18 @@ bool Cerberus::_encryptFile()
     printf("\n\t");
     printf("Threads [%d]", uiArgonThreads);
     printf("\n\t");
-    printf("Memory [%lu MiB]\n", (unsigned long)((1 << ucArgonMemory) * 1024) / 1024);
+    printf("Memory [%llu MiB]\n", (((unsigned long long)(1) << ucArgonMemory) / 1024));
 
     printf("Deriving keys...\n");
     if (!deriveAesKeys(vSecretSequence, vSalt, vKey, vIv))
     {
       return false;
+    }
+
+    utils::memset_sec(&vSecretSequence[0], vSecretSequence.size(), bIsMemZeroed);
+    if (!bIsMemZeroed)
+    {
+      printf("Warning: Argon2 passphrase area was not properly cleaned\n");
     }
   }
 
@@ -367,6 +394,20 @@ bool Cerberus::_encryptFile()
     ucKeyManagementOpt == AES_ENC_OPT_KEY ? vAppend.push_back(AES_ENC_OPT_KEY) : vAppend.push_back(AES_ENC_OPT_ECC);
   }
 
+  bIsMemZeroed = false;
+  utils::memset_sec(&vKey, vKey.size(), bIsMemZeroed);
+  if (!bIsMemZeroed)
+  {
+    printf("Warning: AES key memory area was not properly cleaned\n");
+  }
+ 
+  bIsMemZeroed = false;
+  utils::memset_sec(&vIv, vIv.size(), bIsMemZeroed);
+  if (!bIsMemZeroed)
+  {
+    printf("Warning: AES iv memory area was not properly cleaned\n");
+  }
+
   if (bDetachHeader)
   {
     if (!utils::WriteFile(sTag, vTag, O_CREAT | O_WRONLY))
@@ -398,12 +439,12 @@ bool Cerberus::_encryptFile()
 
 bool Cerberus::_decryptFile()
 {
+  bool bIsMemZeroed = false;
   int fdIn = 0;
   const mode_t flagsRead = O_RDONLY | O_NOATIME;
   long long llFileSize = 0;
   long long llReadLimit = 0;
   unsigned long long ullProcessedBytes = 0;
-  unsigned short usRsaPayloadSize = 0;
   bool bIsTagDetached = false;
   unsigned char ucEncOpt = 0xff;
   std::vector<unsigned char> vKey, vIv, vAppend, vTmp, vTag;
@@ -498,7 +539,7 @@ bool Cerberus::_decryptFile()
       return false;
     }
 
-    usRsaPayloadSize = vTmp[0];
+    unsigned short usRsaPayloadSize = vTmp[0];
     usRsaPayloadSize <<= 8;
     usRsaPayloadSize |= vTmp[1];
 
@@ -579,7 +620,6 @@ bool Cerberus::_decryptFile()
       ucArgonMemory = vTmp[9];
     }
 
-    // TODO: for tomorrow...
     std::vector<unsigned char> vSecretSequence, vSalt, vEcEphemeral;
 
     if (ucEncOpt == AES_ENC_OPT_KEY)
@@ -604,9 +644,9 @@ bool Cerberus::_decryptFile()
       printf("\n\t");
       printf("Curve [%s]", OBJ_nid2sn(iEcGroup));
       printf("\n\t");
-      printf("Affiliate point size [%d]", vSecretSequence.size());
+      printf("Affiliate point size [%lu]", vSecretSequence.size());
       printf("\n\t");
-      printf("EC ephemeral key size [%d])", vEcEphemeral.size());
+      printf("EC ephemeral key size [%lu])", vEcEphemeral.size());
       
       printf("\n\t");
       printf("\n");
@@ -653,13 +693,19 @@ bool Cerberus::_decryptFile()
     printf("\n\t");
     printf("Threads [%d]", uiArgonThreads);
     printf("\n\t");
-    printf("Memory [%lu MiB]\n", (unsigned long)((1 << ucArgonMemory) * 1024) / 1024);
+    printf("Memory [%llu MiB]\n", (((unsigned long long)(1) << ucArgonMemory) / 1024));
 
     printf("Deriving keys...\n");
     if (!deriveAesKeys(vSecretSequence, vSalt, vKey, vIv))
     {
       utils::CloseFile(fdIn);
       return false;
+    }
+
+    utils::memset_sec(&vSecretSequence[0], vSecretSequence.size(), bIsMemZeroed);
+    if (!bIsMemZeroed)
+    {
+      printf("Warning: Argon2 passphrase area was not properly cleaned\n");
     }
   }
 
@@ -675,17 +721,37 @@ bool Cerberus::_decryptFile()
   }
 
   printf("Decryption...\n");
-  return utils::gcmDecryptFileWrap(sIn, sOut, vKey, vIv, vTag, llReadLimit, ullProcessedBytes, bForce);
+  if (!utils::gcmDecryptFileWrap(sIn, sOut, vKey, vIv, vTag, llReadLimit, ullProcessedBytes, bForce))
+  {
+    return false;
+  }
+
+  bIsMemZeroed = false;
+  utils::memset_sec(&vKey, vKey.size(), bIsMemZeroed);
+  if (!bIsMemZeroed)
+  {
+    printf("Warning: AES key memory area was not properly cleaned\n");
+  }
+ 
+  bIsMemZeroed = false;
+  utils::memset_sec(&vIv, vIv.size(), bIsMemZeroed);
+  if (!bIsMemZeroed)
+  {
+    printf("Warning: AES iv memory area was not properly cleaned\n");
+  }
+
+  return true;
 }
 
 bool Cerberus::deriveAesKeys(const std::vector<unsigned char> &_vSecretSequence, const std::vector<unsigned char> &_vSalt, std::vector<unsigned char> &_vKey, std::vector<unsigned char> &_vIv)
 {
-  if (_vSecretSequence.empty())
+  if (_vSecretSequence.empty() || _vSalt.empty())
   {
-    printf("Passphrase and key file cannot be both empty\n");
+    printf("Passphrase and salt must be present\n");
     return false;
   }
 
+  bool bIsMemZeroed = false;
   std::vector<unsigned char> vKeys(AES256_KEY_SIZE + IV_SIZE, 0);
   typedef bool FuncArgonVariant(unsigned char*, uint32_t, unsigned char*, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, unsigned char*, unsigned char*, uint32_t);
   FuncArgonVariant *fArgonVariantPointer = NULL;
@@ -717,6 +783,12 @@ bool Cerberus::deriveAesKeys(const std::vector<unsigned char> &_vSecretSequence,
 
   _vKey = (std::vector<unsigned char>(vKeys.begin(), vKeys.begin() + AES256_KEY_SIZE));
   _vIv = (std::vector<unsigned char>(vKeys.begin() + AES256_KEY_SIZE, vKeys.end()));
+
+  utils::memset_sec(&vKeys[0], vKeys.size(), bIsMemZeroed);
+  if (!bIsMemZeroed)
+  {
+    printf("Warning: AES keys memory area was not properly cleaned\n");
+  }
 
   return true;
 }

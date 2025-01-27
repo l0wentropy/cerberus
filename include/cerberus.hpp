@@ -85,8 +85,8 @@ public:
   void setKeyFileData(const std::vector<unsigned char> &_vKeyFileBytes);
   void unsetRsaKey();
   void unsetEcKey();
-  void unsetPassphrase();
-  void unsetKeyFileData();
+  bool unsetPassphrase();
+  bool unsetKeyFileData();
   void setArgonParams(const unsigned char &_ucVariant, const unsigned int &_uiIterations, const unsigned int &_uiThreads, const unsigned char &_ucMemory);
   void detachTag(const std::string &_sTag);
   void attachTag();

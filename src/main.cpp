@@ -91,23 +91,23 @@ ssize_t getNoEchoLine(char *ucBufPtr, size_t *n)
 
 int main(int argc, char **argv)
 {
-  const std::string strParPrefix = "--";
-  const std::string strParEncrypt = "encrypt";
-  const std::string strParDecrypt = "decrypt";
-  const std::string strParIn = "in";
-  const std::string strParOut = "out";
-  const std::string strRsaPub = "rsa-public";
-  const std::string strRsaPriv = "rsa-private";
-  const std::string strEcPub = "ec-public";
-  const std::string strEcPriv = "ec-private";
-  const std::string strPwd = "pwd";
-  const std::string strKeyFile = "key-file";
-  const std::string strArgon2Variant = "argon2-variant";
+  const std::string strParPrefix        = "--";
+  const std::string strParEncrypt       = "encrypt";
+  const std::string strParDecrypt       = "decrypt";
+  const std::string strParIn            = "in";
+  const std::string strParOut           = "out";
+  const std::string strRsaPub           = "rsa-public";
+  const std::string strRsaPriv          = "rsa-private";
+  const std::string strEcPub            = "ec-public";
+  const std::string strEcPriv           = "ec-private";
+  const std::string strPwd              = "pwd";
+  const std::string strKeyFile          = "key-file";
+  const std::string strArgon2Variant    = "argon2-variant";
   const std::string strArgon2Iterations = "iterations";
-  const std::string strArgon2Threads = "threads";
-  const std::string strArgon2Memory = "memory";
-  const std::string strTag = "tag";
-  const std::string strForce = "force";
+  const std::string strArgon2Threads    = "threads";
+  const std::string strArgon2Memory     = "memory";
+  const std::string strTag              = "tag";
+  const std::string strForce            = "force";
 
   const std::vector<std::string> vCmdOptions = {strParEncrypt, strParDecrypt, strParIn, strParOut, strRsaPub, strRsaPriv, strEcPub, strEcPriv, strPwd, strKeyFile,
     strArgon2Variant, strArgon2Iterations, strArgon2Threads, strArgon2Memory, strTag, strForce};
@@ -357,7 +357,7 @@ int main(int argc, char **argv)
 
         if (ullRetval >= 22)
         {
-          printf("Proceed using [%lu GiB] memory? (y/n)\n", (unsigned long)((1 << ullRetval) / 1024 / 1024));
+          printf("Proceed using [%llu GiB] memory? (y/n)\n", (((unsigned long long)(1) << ullRetval) / 1024 / 1024));
           char c = getchar();
           if (c != 'y' && c != 'Y')
           {
@@ -365,7 +365,6 @@ int main(int argc, char **argv)
             return argc;
           }
         }
-
         ucArgonMemory = ullRetval;
       }
       continue;
@@ -377,7 +376,6 @@ int main(int argc, char **argv)
         printHelp();
         return argc;
       }
-
       bIsTag = true;
       strTagFilePath = argv[i + 1];
       continue;
@@ -555,7 +553,7 @@ int main(int argc, char **argv)
         utils::memset_sec(ucPtr, uiMaxPwdLen, bIsMemZeroed);
         if (!bIsMemZeroed)
         {
-          printf("Warning: passphrase memory area was not properly erased\n");
+          printf("Warning: passphrase memory area was not properly cleaned\n");
         }
         free(ucPtr);
       }
@@ -631,14 +629,40 @@ int main(int argc, char **argv)
   }
 
   // TODO: work with memory
-  if (bIsRsa && rsaKey)
+  cerberObj.reset();
+  if (rsaKey)
   {
-    RSA_free(rsaKey);
+//    RSA_free(rsaKey);
+  }
+  if (ecKey)
+  {
+//    EC_KEY_free(ecKey);
   }
 
-  cerberObj.reset();
+  bIsMemZeroed = false;
+  if (!vPassphrase.empty())
+  {
+    utils::memset_sec(&vPassphrase[0], vPassphrase.size(), bIsMemZeroed);
+    if (!bIsMemZeroed)
+    {
+      printf("Warning: passphrase memory area was not properly cleaned\n");
+    }
+    vPassphrase.clear();
+  }
+
+  bIsMemZeroed = false;
+  if (!vKeyFile.empty())
+  {
+    utils::memset_sec(&vKeyFile[0], vKeyFile.size(), bIsMemZeroed);
+    if (!bIsMemZeroed)
+    {
+      printf("Warning: key file memory area was not properly cleaned\n");
+    }
+    vKeyFile.clear();
+  }
 
   printf("\n* File [%s] is %s and saved to [%s]\n", strInputFilePath.c_str(), bIsEncrypt ? "encrypted" : "decrypted", strOutputFilePath.c_str());
 
   return 0;
 }
+
