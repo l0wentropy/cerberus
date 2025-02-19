@@ -12,6 +12,9 @@ set(SOURCES
 	src/main.cpp
 )
 
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED True)
+
 add_executable(cerberus ${SOURCES})
 target_include_directories(cerberus PRIVATE ${PROJECT_SOURCE_DIR}/include)
 target_include_directories(cerberus PRIVATE ${PROJECT_BINARY_DIR})
@@ -30,5 +33,3 @@ target_link_libraries(cerberus PUBLIC OpenSSL::SSL OpenSSL::Crypto argon2)
 
 target_compile_options(cerberus PRIVATE -D_FORTIFY_SOURCE=2 -D_GLIBCXX_ASSERTIONS -fstack-clash-protection -fstack-protector-strong -fcf-protection -O2 -Wall -Wl,-z,relro)
 
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED True)
