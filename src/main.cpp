@@ -234,6 +234,7 @@ int main(int argc, char **argv)
     }
     if (argv[i] == strParPrefix + strPwd)
     {
+      // pass to openssl layer
       if (bKeyOpt)
       {
         printHelp();
@@ -331,7 +332,7 @@ int main(int argc, char **argv)
 
       if (argv[i] == strParPrefix + strArgon2Iterations)
       {
-        if (ullRetval > (1 << (32 - 1)))
+        if (ullRetval > ((unsigned int)(1) << (32 - 1)))
         {
           printHelp();
           return argc;
@@ -496,21 +497,41 @@ int main(int argc, char **argv)
       }
     }
   }
-  else if (bIsPwd || bIsKeyFile)
+  else if (bIsPwd)
   {
-    if (bIsPwd)
+    ucPtr = (unsigned char*)malloc(uiMaxPwdLen);
+    if (ucPtr == NULL)
     {
-      ucPtr = (unsigned char*)malloc(uiMaxPwdLen);
-      if (ucPtr == NULL)
-      {
-        printf("Could not allocated memory for passphrase reading\n");
-        return -1;
-      }
+      printf("Could not allocate memory for passphrase reading\n");
+      return -1;
+    }
 
+    memset(ucPtr, 0, uiMaxPwdLen);
+
+    printf("Input passphrase: ");
+    ssize_t uiRetval = getNoEchoLine((char*)ucPtr, &uiMaxPwdLen);
+    printf("\n");
+
+    if (uiRetval == -1 || uiRetval <= 1)
+    {
+      printf("Could not read password from stdin\n");
+      return -1;
+    }
+    if (uiRetval - 1 > MAX_PWD_READ_LEN)
+    {
+      printf("Passphrase too large\n");
+      return -1;
+    }
+
+    vPassphrase.resize(uiRetval - 1, 0);
+    memcpy(&vPassphrase[0], ucPtr, uiRetval - 1);
+
+    if (bIsEncrypt)
+    {
       memset(ucPtr, 0, uiMaxPwdLen);
 
-      printf("Input passphrase: ");
-      size_t uiRetval = getNoEchoLine((char*)ucPtr, &uiMaxPwdLen);
+      printf("Confirm passphrase: ");
+      uiRetval = getNoEchoLine((char*)ucPtr, &uiMaxPwdLen);
       printf("\n");
 
       if (uiRetval == -1 || uiRetval <= 1)
@@ -518,45 +539,22 @@ int main(int argc, char **argv)
         printf("Could not read password from stdin\n");
         return -1;
       }
-      if (uiRetval - 1 > MAX_PWD_READ_LEN)
+
+      if (vPassphrase.size() != uiRetval - 1 || memcmp(&vPassphrase[0], ucPtr, vPassphrase.size()) != 0)
       {
-        printf("Passphrase too large\n");
+        printf("Passphrases do not match\n");
         return -1;
       }
+    }
 
-      vPassphrase.resize(uiRetval - 1, 0);
-      memcpy(&vPassphrase[0], ucPtr, uiRetval - 1);
-
-      if (bIsEncrypt)
+    if (ucPtr)
+    {
+      utils::memset_sec(ucPtr, uiMaxPwdLen, bIsMemZeroed);
+      if (!bIsMemZeroed)
       {
-        memset(ucPtr, 0, uiMaxPwdLen);
-
-        printf("Confirm passphrase: ");
-        uiRetval = getNoEchoLine((char*)ucPtr, &uiMaxPwdLen);
-        printf("\n");
-
-        if (uiRetval == -1 || uiRetval <= 1)
-        {
-          printf("Could not read password from stdin\n");
-          return -1;
-        }
-
-        if (vPassphrase.size() != uiRetval - 1 || memcmp(&vPassphrase[0], ucPtr, vPassphrase.size()) != 0)
-        {
-          printf("Passphrases do not match\n");
-          return -1;
-        }
+        printf("Warning: passphrase memory area was not properly cleaned\n");
       }
-
-      if (ucPtr)
-      {
-        utils::memset_sec(ucPtr, uiMaxPwdLen, bIsMemZeroed);
-        if (!bIsMemZeroed)
-        {
-          printf("Warning: passphrase memory area was not properly cleaned\n");
-        }
-        free(ucPtr);
-      }
+      free(ucPtr);
     }
   }
   else

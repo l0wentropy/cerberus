@@ -283,7 +283,7 @@ bool Cerberus::_encryptFile()
 
       printf("ECIES:");
       printf("\n\t");
-      printf("Curve [%s]", OBJ_nid2sn(iEcGroup));
+      printf("Curve [%s]", OBJ_nid2sn(iEcGroup)); // wrap into utils
       printf("\n\t");
       printf("Affiliate point size [%lu]", vSecretSequence.size());
       printf("\n\t");
@@ -642,7 +642,7 @@ bool Cerberus::_decryptFile()
 
       printf("ECIES:");
       printf("\n\t");
-      printf("Curve [%s]", OBJ_nid2sn(iEcGroup));
+      printf("Curve [%s]", OBJ_nid2sn(iEcGroup)); // wrap into utils
       printf("\n\t");
       printf("Affiliate point size [%lu]", vSecretSequence.size());
       printf("\n\t");
