@@ -148,6 +148,22 @@ public:
     unsigned char* ucPwd = NULL,
     const unsigned int &uiPwdLen = 0);
 
+  static bool reencryptPrivRSA_PEM(
+    const std::string &sPathIn,
+    const std::string &sPathOut,
+    unsigned char *ucOldPwd,
+    const bool &bEnc = false,
+    unsigned char *ucPwd = NULL,
+    const unsigned int &uiPwdLen = 0);
+
+  static bool reencryptPrivEC_PEM(
+    const std::string &sPathIn,
+    const std::string &sPathOut,
+    unsigned char *ucOldPwd,
+    const bool &bEnc = false,
+    unsigned char *ucPwd = NULL,
+    const unsigned int &uiPwdLen = 0);
+
   static RSA * getPubRSA(const std::string &sPath);
 
   static EC_KEY * getPubEC(const std::string &sPath);

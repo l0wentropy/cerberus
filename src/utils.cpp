@@ -490,6 +490,76 @@ bool utils::genKeyPairEC(
   return true;
 }
 
+bool utils::reencryptPrivRSA_PEM(
+  const std::string &sPathIn,
+  const std::string &sPathOut,
+  unsigned char *ucOldPwd,
+  const bool &bEnc,
+  unsigned char *ucPwd,
+  const unsigned int &uiPwdLen)
+{
+  FILE *fp = NULL;
+  RSA *rsaKey = NULL;
+  const EVP_CIPHER *enc = bEnc ? EVP_aes_256_xts() : NULL;
+
+  rsaKey = getPrivRSA(sPathIn, ucOldPwd);
+
+  if (rsaKey == NULL)
+  {
+    return false;
+  }
+
+  fp = fopen(sPathOut.c_str(), "w");
+  if (fp == NULL)
+  {
+    RSA_free(rsaKey);
+    return false;
+  }
+
+  PEM_write_RSAPrivateKey(fp, rsaKey, enc, ucPwd, uiPwdLen, 0, NULL);
+  fclose(fp);
+
+  RSA_free(rsaKey);
+
+  return true;
+}
+
+bool utils::reencryptPrivEC_PEM(
+  const std::string &sPathIn,
+  const std::string &sPathOut,
+  unsigned char *ucOldPwd,
+  const bool &bEnc,
+  unsigned char *ucPwd,
+  const unsigned int &uiPwdLen)
+{
+  FILE *fp = NULL;
+  EC_KEY *ec = NULL;
+  const EVP_CIPHER *enc = bEnc ? EVP_aes_256_xts() : NULL;
+
+  ec = getPrivEC(sPathIn, ucOldPwd);
+
+  if (ec == NULL)
+  {
+    return false;
+  }
+
+  EC_KEY_set_asn1_flag(ec, OPENSSL_EC_NAMED_CURVE);
+
+  fp = fopen(sPathOut.c_str(), "w");
+  if (fp == NULL)
+  {
+    EC_KEY_free(ec);
+    return false;
+  }
+
+  PEM_write_ECPrivateKey(fp, ec, enc, ucPwd, uiPwdLen, 0, NULL);
+  fclose(fp);
+
+  EC_KEY_free(ec);
+
+  return true;
+}
+
 RSA * utils::getPubRSA(const std::string &sPath)
 {
   RSA *rsa = NULL;
