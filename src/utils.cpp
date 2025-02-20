@@ -350,7 +350,7 @@ unsigned int utils::combineShortsToUnsignedInt(const unsigned short &usLeft, con
 
 std::string utils::sToLower(const std::string &sIn)
 {
-	std::string sOut;
+  std::string sOut;
 
   for (const auto &x : sIn)
   {
@@ -361,7 +361,7 @@ std::string utils::sToLower(const std::string &sIn)
     }
     sOut += x;
   }
-	return sOut;
+  return sOut;
 }
 
 bool utils::genRandBytes(std::vector<unsigned char> &vOut, const unsigned int &uiLen)
@@ -626,6 +626,11 @@ EC_KEY * utils::getPrivEC(const std::string &sPath, unsigned char *ucPwd)
 
 RSA * utils::getPubRSA(const std::vector<unsigned char> &vBuffer)
 {
+  if (vBuffer.empty())
+  {
+    return NULL;
+  }
+
   BIO *bio = NULL;
   RSA *rsa = NULL;
 
@@ -644,6 +649,11 @@ RSA * utils::getPubRSA(const std::vector<unsigned char> &vBuffer)
 
 EC_KEY * utils::getPubEC(const std::vector<unsigned char> &vBuffer)
 {
+  if (vBuffer.empty())
+  {
+    return NULL;
+  }
+
   BIO *bio = NULL;
   EC_KEY *ec = NULL;
 
@@ -657,6 +667,11 @@ EC_KEY * utils::getPubEC(const std::vector<unsigned char> &vBuffer)
 
 RSA * utils::getPrivRSA(const std::vector<unsigned char> &vBuffer, unsigned char *ucPwd)
 {
+  if (vBuffer.empty())
+  {
+    return NULL;
+  }
+
   BIO *bio = NULL;
   RSA *rsa = NULL;
 
@@ -670,6 +685,11 @@ RSA * utils::getPrivRSA(const std::vector<unsigned char> &vBuffer, unsigned char
 
 EC_KEY * utils::getPrivEC(const std::vector<unsigned char> &vBuffer, unsigned char *ucPwd)
 {
+  if (vBuffer.empty())
+  {
+    return NULL;
+  }
+
   BIO *bio = NULL;
   EC_KEY *ec = NULL;
 
@@ -738,6 +758,11 @@ bool utils::ecPrivToBin(const EC_KEY *ec_key, std::vector<unsigned char> &vOut)
 
 EC_POINT * utils::ecPubBinToPoint(const std::vector<unsigned char> &vBuffer, const EC_GROUP *ec_group)
 {
+  if (vBuffer.empty())
+  {
+    return NULL;
+  }
+
   BIGNUM   *pubk_bn;
   BN_CTX   *pubk_bn_ctx;
 
