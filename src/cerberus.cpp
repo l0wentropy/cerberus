@@ -395,14 +395,14 @@ bool Cerberus::_encryptFile()
   }
 
   bIsMemZeroed = false;
-  utils::memset_sec(&vKey, vKey.size(), bIsMemZeroed);
+  utils::memset_sec(&vKey[0], vKey.size(), bIsMemZeroed);
   if (!bIsMemZeroed)
   {
     printf("Warning: AES key memory area was not properly cleaned\n");
   }
  
   bIsMemZeroed = false;
-  utils::memset_sec(&vIv, vIv.size(), bIsMemZeroed);
+  utils::memset_sec(&vIv[0], vIv.size(), bIsMemZeroed);
   if (!bIsMemZeroed)
   {
     printf("Warning: AES iv memory area was not properly cleaned\n");
@@ -727,14 +727,14 @@ bool Cerberus::_decryptFile()
   }
 
   bIsMemZeroed = false;
-  utils::memset_sec(&vKey, vKey.size(), bIsMemZeroed);
+  utils::memset_sec(&vKey[0], vKey.size(), bIsMemZeroed);
   if (!bIsMemZeroed)
   {
     printf("Warning: AES key memory area was not properly cleaned\n");
   }
  
   bIsMemZeroed = false;
-  utils::memset_sec(&vIv, vIv.size(), bIsMemZeroed);
+  utils::memset_sec(&vIv[0], vIv.size(), bIsMemZeroed);
   if (!bIsMemZeroed)
   {
     printf("Warning: AES iv memory area was not properly cleaned\n");
