@@ -112,15 +112,15 @@ int main(int argc, char **argv)
   const std::vector<std::string> vCmdOptions = {strParEncrypt, strParDecrypt, strParIn, strParOut, strRsaPub, strRsaPriv, strEcPub, strEcPriv, strPwd, strKeyFile,
     strArgon2Variant, strArgon2Iterations, strArgon2Threads, strArgon2Memory, strTag, strForce};
 
-  bool bDirection = false;
-  bool bKeyOpt = false;
-  bool bIsEncrypt = true;
-  bool bIsRsa = false;
-  bool bIsEcc = false;
-  bool bIsPwd = false;
-  bool bIsKeyFile = false;
-  bool bIsTag = false;
-  bool bIsForce = false;
+  bool bDirection   = false;
+  bool bKeyOpt      = false;
+  bool bIsEncrypt   = true;
+  bool bIsRsa       = false;
+  bool bIsEcc       = false;
+  bool bIsPwd       = false;
+  bool bIsKeyFile   = false;
+  bool bIsTag       = false;
+  bool bIsForce     = false;
 
   std::string strInputFilePath;
   std::string strOutputFilePath;
@@ -129,11 +129,10 @@ int main(int argc, char **argv)
   std::string strKeyFilePath;
   std::string strTagFilePath;
 
-  RSA *rsaKey = NULL;
-  EC_KEY *ecKey = NULL;
-  bool bIsMemZeroed = false;
-  unsigned char *ucPtr = NULL;
-  size_t uiMaxPwdLen = MAX_PWD_READ_LEN;
+  RSA *rsaKey           = NULL;
+  EC_KEY *ecKey         = NULL;
+  bool bIsMemZeroed     = false;
+
   std::vector<unsigned char> vPassphrase, vKeyFile;
 
   unsigned char   ucArgonVariant      = ARGON2ID_VAR;
@@ -499,6 +498,9 @@ int main(int argc, char **argv)
   }
   else if (bIsPwd)
   {
+    size_t uiMaxPwdLen = MAX_PWD_READ_LEN;
+    unsigned char *ucPtr = NULL;
+
     ucPtr = (unsigned char*)malloc(uiMaxPwdLen);
     if (ucPtr == NULL)
     {
