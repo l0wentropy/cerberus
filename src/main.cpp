@@ -514,19 +514,22 @@ int main(int argc, char **argv)
     ssize_t uiRetval = getNoEchoLine((char*)ucPtr, &uiMaxPwdLen);
     printf("\n");
 
-    if (uiRetval == -1 || uiRetval <= 1)
+    if (uiRetval <= 1)
     {
       printf("Could not read password from stdin\n");
+      free(ucPtr);
       return -1;
     }
-    if (uiRetval - 1 > MAX_PWD_READ_LEN)
+
+    if (uiRetval > MAX_PWD_READ_LEN)
     {
       printf("Passphrase too large\n");
+      free(ucPtr);
       return -1;
     }
 
     vPassphrase.resize(uiRetval - 1, 0);
-    memcpy(&vPassphrase[0], ucPtr, uiRetval - 1);
+    memcpy(&vPassphrase[0], ucPtr, vPassphrase.size());
 
     if (bIsEncrypt)
     {
@@ -536,21 +539,23 @@ int main(int argc, char **argv)
       uiRetval = getNoEchoLine((char*)ucPtr, &uiMaxPwdLen);
       printf("\n");
 
-      if (uiRetval == -1 || uiRetval <= 1)
+      if (uiRetval <= 1)
       {
         printf("Could not read password from stdin\n");
+        free(ucPtr);
         return -1;
       }
 
       if (vPassphrase.size() != uiRetval - 1 || memcmp(&vPassphrase[0], ucPtr, vPassphrase.size()) != 0)
       {
         printf("Passphrases do not match\n");
+        free(ucPtr);
         return -1;
       }
     }
-
     if (ucPtr)
     {
+      bIsMemZeroed = false;
       utils::memset_sec(ucPtr, uiMaxPwdLen, bIsMemZeroed);
       if (!bIsMemZeroed)
       {
