@@ -343,9 +343,9 @@ void utils::divideUnsignedIntToShorts(const unsigned int &uiData, unsigned short
 
 unsigned int utils::combineShortsToUnsignedInt(const unsigned short &usLeft, const unsigned short &usRight)
 {
-  unsigned int uiReval = (unsigned int)(usLeft << 16);
-  uiReval |= usRight;
-  return uiReval;
+  unsigned int uiRetval = (unsigned int)(usLeft << 16);
+  uiRetval |= usRight;
+  return uiRetval;
 }
 
 std::string utils::sToLower(const std::string &sIn)
