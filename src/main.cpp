@@ -302,7 +302,7 @@ int main(int argc, char **argv)
       }
       continue;
     }
-    if (!bIsRsa && argv[i] == strParPrefix + strArgon2Iterations || argv[i] == strParPrefix + strArgon2Threads || argv[i] == strParPrefix + strArgon2Memory)
+    if (!bIsRsa && (argv[i] == strParPrefix + strArgon2Iterations || argv[i] == strParPrefix + strArgon2Threads || argv[i] == strParPrefix + strArgon2Memory))
     {
       if (i + 1 > argc)
       {
