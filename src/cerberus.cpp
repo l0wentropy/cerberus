@@ -257,7 +257,7 @@ bool Cerberus::_encryptFile()
     {
       if (!utils::eciesTXGenerateSymKey(iEcGroup, vEcPub, vEcEphemeral, vSecretSequence))
       {
-        printf("Cannot generate TX symmetric key\n");
+        printf("Cannot generate TX shared key\n");
         return false;
       }
 
@@ -355,6 +355,7 @@ bool Cerberus::_encryptFile()
       return false;
     }
 
+    // TODO: clean append
     vAppend.clear();
 
     vAppend.insert(vAppend.end(), vBufRSA.begin(), vBufRSA.begin() + rsaRetval);
@@ -577,6 +578,7 @@ bool Cerberus::_decryptFile()
       return false;
     }
 
+    // clean tmp
     vTmp.resize(rsaRetval);
     vKey.insert(vKey.end(), vTmp.begin(), vTmp.begin() + AES256_KEY_SIZE);
     vIv.insert(vIv.end(), vTmp.begin() + AES256_KEY_SIZE, vTmp.begin() + AES256_KEY_SIZE + IV_SIZE);

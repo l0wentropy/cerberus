@@ -16,20 +16,24 @@
 
 #define _HEADER_USAGE_  "Encryption: "                                                                                          \
                         "\n\t"                                                                                                  \
-                        "cerberus --encrypt --in file.in --out file.out --ec-public ec_pub.pem --argon2-variant argon2d"        \
+                        "cerberus --encrypt --in file.in --out file.out --ec-public pub.pem --argon2=d"                         \
                         "\n\t"                                                                                                  \
-                        "cerberus --encrypt --in file.in --out file.out --pwd --key-file file.key"                              \
+                        "cerberus --encrypt --in file.in --out file.out --pwd --key-file file.key --iterations=18"              \
+                        "\n\t"                                                                                                  \
+                        "cerberus --encrypt --in file.in --out file.out --rsa-public pub.pem --tag file.tag"                    \
                         "\n\n"                                                                                                  \
                         "Decryption: "                                                                                          \
                         "\n\t"                                                                                                  \
-                        "cerberus --decrypt --in file.in --out file.out --rsa-private rsa_private.pem --key-file rsa_pem.pwd"   \
+                        "cerberus --decrypt --in file.in --out file.out --ec-private priv.pem"                                  \
                         "\n\t"                                                                                                  \
-                        "cerberus --decrypt --in file.in --out file.out --pwd"                                                  \
+                        "cerberus --decrypt --in file.in --out file.out --pwd --tag file.tag"                                   \
+                        "\n\t"                                                                                                  \
+                        "cerberus --decrypt --in file.in --out file.out --rsa-private priv.pem --key-file rsa_pem.pwd"          \
                         "\n\t"                                                                                                  \
                         "\n\n"                                                                                                  \
                         "Argon2 options:"                                                                                       \
                         "\n\t"                                                                                                  \
-                        "--argon2-variant argon2i/argon2d/argon2id (default)"                                                   \
+                        "--argon2 i/d/id (id default)"                                                                          \
                         "\n\t"                                                                                                  \
                         "--iterations 1 to 2^32−1 (16 default)"                                                                 \
                         "\n\t"                                                                                                  \
@@ -38,7 +42,7 @@
                         "--memory 1 to 32 (memory usage of 2^N KiB, default 20)"                                                \
                         "\n\n\t"                                                                                                \
                         "Argon2 options are omitted with decryption process as those will be taken from encrypted "             \
-                        "file metadata."                                                                                        \
+                        "file metadata"                                                                                         \
                         "\n\t"                                                                                                  \
                         "In case any reason to force using other than stored values add --force flag"                           \
                         "\n\n"                                                                                                  \
@@ -102,15 +106,19 @@ int main(int argc, char **argv)
   const std::string strEcPriv           = "ec-private";
   const std::string strPwd              = "pwd";
   const std::string strKeyFile          = "key-file";
-  const std::string strArgon2Variant    = "argon2-variant";
+  const std::string strArgon2Variant    = "argon2";
   const std::string strArgon2Iterations = "iterations";
   const std::string strArgon2Threads    = "threads";
   const std::string strArgon2Memory     = "memory";
   const std::string strTag              = "tag";
   const std::string strForce            = "force";
+  const std::string strParSuffix        = "=";
 
   const std::vector<std::string> vCmdOptions = {strParEncrypt, strParDecrypt, strParIn, strParOut, strRsaPub, strRsaPriv, strEcPub, strEcPriv, strPwd, strKeyFile,
     strArgon2Variant, strArgon2Iterations, strArgon2Threads, strArgon2Memory, strTag, strForce};
+
+  const std::vector<std::string> vCmdAssignable = {strParIn, strParOut, strRsaPub, strRsaPriv, strEcPub, strEcPriv, strKeyFile, strArgon2Variant, strArgon2Iterations,
+    strArgon2Threads, strArgon2Memory, strTag};
 
   bool bDirection   = false;
   bool bKeyOpt      = false;
@@ -142,6 +150,9 @@ int main(int argc, char **argv)
 
   for (int i = 0; i < argc; ++i)
   {
+    std::string strCurOpt;
+    std::string strAssign;
+
     if (std::string(argv[i]).find(strParPrefix) != 0)
     {
       continue;
@@ -151,8 +162,34 @@ int main(int argc, char **argv)
       bool bFound = false;
       for (const auto &opt : vCmdOptions)
       {
-        if (std::string(argv[i]) == strParPrefix + opt)
+        const std::string sArgv(argv[i]);
+
+        if (sArgv == strParPrefix + opt || sArgv.find(strParPrefix + opt + strParSuffix) == 0)
         {
+          if (sArgv.find(strParPrefix + opt + strParSuffix) == 0)
+          {
+            for (const auto &assignable : vCmdAssignable)
+            {
+              if (opt == assignable)
+              {
+                bFound = true;
+                break;
+              }
+            }
+            if (!bFound)
+            {
+              printHelp();
+              return argc;
+            }
+
+            strAssign = std::string(sArgv.begin() + sArgv.find(strParSuffix) + 1, sArgv.end());
+            if (strAssign.empty())
+            {
+              bFound = false;
+              break;
+            }
+          }
+          strCurOpt = opt;
           bFound = true;
           break;
         }
@@ -163,75 +200,76 @@ int main(int argc, char **argv)
         return argc;
       }
     }
-    if (argv[i] == strParPrefix + strParEncrypt || argv[i] == strParPrefix + strParDecrypt)
+
+    if (strCurOpt == strParEncrypt || strCurOpt == strParDecrypt)
     {
       if (bDirection)
       {
         printHelp();
         return argc;
       }
-      if (argv[i] == strParPrefix + strParDecrypt)
+      if (strCurOpt == strParDecrypt)
       {
         bIsEncrypt = false;
       }
       bDirection = true;
       continue;
     }
-    if (argv[i] == strParPrefix + strRsaPub || argv[i] == strParPrefix + strRsaPriv)
+    if (strCurOpt == strRsaPub || strCurOpt == strRsaPriv)
     {
       if (!bDirection || bKeyOpt)
       {
         printHelp();
         return argc;
       }
-      if (argv[i] == strParPrefix + strRsaPub && !bIsEncrypt)
+      if (strCurOpt == strRsaPub && !bIsEncrypt)
       {
         printHelp();
         return argc;
       }
-      else if (argv[i] == strParPrefix + strRsaPriv && bIsEncrypt)
+      if (strCurOpt == strRsaPriv && bIsEncrypt)
       {
         printHelp();
         return argc;
       }
-      if (i + 1 > argc)
+      if (strAssign.empty() && i + 1 > argc)
       {
         printHelp();
         return argc;
       }
       bIsRsa = true;
       bKeyOpt = true;
-      strRsaKeyFilePath = argv[i + 1];
+      strRsaKeyFilePath = strAssign.empty() ? argv[i + 1] : strAssign;
       continue;
     }
-    if (argv[i] == strParPrefix + strEcPub || argv[i] == strParPrefix + strEcPriv)
+    if (strCurOpt == strEcPub || strCurOpt == strEcPriv)
     {
       if (!bDirection || bKeyOpt)
       {
         printHelp();
         return argc;
       }
-      if (argv[i] == strParPrefix + strEcPub && !bIsEncrypt)
+      if (strCurOpt == strEcPub && !bIsEncrypt)
       {
         printHelp();
         return argc;
       }
-      else if (argv[i] == strParPrefix + strEcPriv && bIsEncrypt)
+      if (strCurOpt == strEcPriv && bIsEncrypt)
       {
         printHelp();
         return argc;
       }
-      if (i + 1 > argc)
+      if (strAssign.empty() && i + 1 > argc)
       {
         printHelp();
         return argc;
       }
       bIsEcc = true;
       bKeyOpt = true;
-      strEcKeyFilePath = argv[i + 1];
+      strEcKeyFilePath = strAssign.empty() ? argv[i + 1] : strAssign;
       continue;
     }
-    if (argv[i] == strParPrefix + strPwd)
+    if (strCurOpt == strPwd)
     {
       // pass to openssl layer
       if (bKeyOpt)
@@ -243,55 +281,55 @@ int main(int argc, char **argv)
       bKeyOpt = true;
       continue;
     }
-    if (argv[i] == strParPrefix + strKeyFile)
+    if (strCurOpt == strKeyFile)
     {
-      if (i + 1 > argc)
+      if (strAssign.empty() && i + 1 > argc)
       {
         printHelp();
         return argc;
       }
       bIsKeyFile = true;
-      strKeyFilePath = argv[i + 1];
+      strKeyFilePath = strAssign.empty() ? argv[i + 1] : strAssign;
       continue;
     }
-    if (argv[i] == strParPrefix + strParIn)
+    if (strCurOpt == strParIn)
     {
-      if (i + 1 > argc)
+      if (strAssign.empty() && i + 1 > argc)
       {
         printHelp();
         return argc;
       }
-      strInputFilePath = argv[i + 1];
+      strInputFilePath = strAssign.empty() ? argv[i + 1] : strAssign;
       continue;
     }
-    if (argv[i] == strParPrefix + strParOut)
+    if (strCurOpt == strParOut)
     {
-      if (i + 1 > argc)
+      if (strAssign.empty() && i + 1 > argc)
       {
         printHelp();
         return argc;
       }
-      strOutputFilePath = argv[i + 1];
+      strOutputFilePath = strAssign.empty() ? argv[i + 1] : strAssign;
       continue;
     }
-    if (!bIsRsa && argv[i] == strParPrefix + strArgon2Variant)
+    if (!bIsRsa && strCurOpt == strArgon2Variant)
     {
-      if (i + 1 > argc)
+      if (strAssign.empty() && i + 1 > argc)
       {
         printHelp();
         return argc;
       }
-      const std::string sVar = argv[i + 1];
+      const std::string sVar = strAssign.empty() ? argv[i + 1] : strAssign;
 
-      if (sVar == "argon2id")
+      if (sVar == ARGON2ID_VAR_STRING)
       {
         ucArgonVariant = ARGON2ID_VAR;
       }
-      else if (sVar == "argon2i")
+      else if (sVar == ARGON2I_VAR_STRING)
       {
         ucArgonVariant = ARGON2I_VAR;
       }
-      else if (sVar == "argon2d")
+      else if (sVar == ARGON2D_VAR_STRING)
       {
         ucArgonVariant = ARGON2D_VAR;
       }
@@ -302,15 +340,15 @@ int main(int argc, char **argv)
       }
       continue;
     }
-    if (!bIsRsa && (argv[i] == strParPrefix + strArgon2Iterations || argv[i] == strParPrefix + strArgon2Threads || argv[i] == strParPrefix + strArgon2Memory))
+    if (!bIsRsa && (strCurOpt == strArgon2Iterations || strCurOpt == strArgon2Threads || strCurOpt == strArgon2Memory))
     {
-      if (i + 1 > argc)
+      if (strAssign.empty() && i + 1 > argc)
       {
         printHelp();
         return argc;
       }
 
-      const std::string sTmp(argv[i + 1]);
+      const std::string sTmp = strAssign.empty() ? argv[i + 1] : strAssign;
 
       for (const auto &x : sTmp)
       {
@@ -329,7 +367,7 @@ int main(int argc, char **argv)
         return argc;
       }
 
-      if (argv[i] == strParPrefix + strArgon2Iterations)
+      if (strCurOpt == strArgon2Iterations)
       {
         if (ullRetval > ((unsigned int)(1) << (32 - 1)))
         {
@@ -338,7 +376,7 @@ int main(int argc, char **argv)
         }
         uiArgonIterations = ullRetval;
       }
-      else if (argv[i] == strParPrefix + strArgon2Threads)
+      else if (strCurOpt == strArgon2Threads)
       {
         if (ullRetval > (1 << (24 - 1)))
         {
@@ -347,7 +385,7 @@ int main(int argc, char **argv)
         }
         uiArgonThreads = ullRetval;
       }
-      else if (argv[i] == strParPrefix + strArgon2Memory)
+      else if (strCurOpt == strArgon2Memory)
       {
         if (ullRetval > 32)
         {
@@ -358,7 +396,7 @@ int main(int argc, char **argv)
         if (ullRetval >= 22)
         {
           printf("Proceed using [%llu GiB] memory? (y/n)\n", (((unsigned long long)(1) << ullRetval) / 1024 / 1024));
-          char c = getchar();
+          const char c = getchar();
           if (c != 'y' && c != 'Y')
           {
             printf("Aborted\n");
@@ -369,18 +407,18 @@ int main(int argc, char **argv)
       }
       continue;
     }
-    if (argv[i] == strParPrefix + strTag)
+    if (strCurOpt == strTag)
     {
-      if (i + 1 > argc)
+      if (strAssign.empty() && i + 1 > argc)
       {
         printHelp();
         return argc;
       }
       bIsTag = true;
-      strTagFilePath = argv[i + 1];
+      strTagFilePath = strAssign.empty() ? argv[i + 1] : strAssign;
       continue;
     }
-    if (argv[i] == strParPrefix + strForce)
+    if (strCurOpt == strForce)
     {
       bIsForce = true;
     }

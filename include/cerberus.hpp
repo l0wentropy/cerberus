@@ -14,6 +14,9 @@
 #define _MAX_KEY_FILE_SIZE              1024 * 1024 * 64
 #define EC_EPHEMERAL_KEY_PADDED_SIZE    256
 #define ARGON2_DEFAULT_SALT_SIZE        32
+#define ARGON2ID_VAR_STRING             "id"
+#define ARGON2I_VAR_STRING              "i"
+#define ARGON2D_VAR_STRING              "d"
 #define ARGON2ID_VAR                    0x00
 #define ARGON2I_VAR                     0x01
 #define ARGON2D_VAR                     0x02
