@@ -382,6 +382,36 @@ int utils::strCurveToNID(const std::string &sCurveName)
   return OBJ_txt2nid(sCurveName.c_str());
 }
 
+std::string utils::NID2Str(const int &iNID)
+{
+  const char *cSn = OBJ_nid2sn(iNID);
+  return cSn ? std::string(cSn) : std::string();
+}
+
+EC_GROUP * utils::ecGetGroup(const EC_KEY *ecKey)
+{
+  return (EC_GROUP*)EC_KEY_get0_group(ecKey);
+}
+
+int utils::ecGetGroup(const EC_GROUP *ecGroup)
+{
+  return EC_GROUP_get_curve_name(ecGroup);
+}
+
+int utils::ecGetECDHSize(const EC_KEY *ecKey)
+{
+  #ifdef __UNRESOLVED_UTILS
+  return ECDH_size(ecKey);
+  #endif
+
+  return ((EC_GROUP_get_degree(EC_KEY_get0_group(ecKey)) + 7) / 8);
+}
+
+int utils::ecGetECDHSize(const EC_GROUP *ecGroup)
+{
+  return ((EC_GROUP_get_degree(ecGroup) + 7) / 8);
+}
+
 bool utils::genKeyPairRSA(
   const std::string &sPathPublic,
   const std::string &sPathPrivate,
@@ -711,25 +741,35 @@ int utils::decryptRsa(const unsigned int &len, unsigned char *from, unsigned cha
   return RSA_private_decrypt(len, from, to, rsaKey, RSA_PKCS1_OAEP_PADDING);
 }
 
-bool utils::ecPubToBin(const EC_KEY *ec_key, int &iGroup, std::vector<unsigned char> &vOut)
+bool utils::ecPubToBin(const EC_KEY *ecKey, std::vector<unsigned char> &vOut)
 {
-  const EC_GROUP *ec_group    = EC_KEY_get0_group(ec_key);
-  const EC_POINT *pub         = EC_KEY_get0_public_key(ec_key);
+  const EC_GROUP *ec_group    = EC_KEY_get0_group(ecKey);
+  const EC_POINT *pub         = EC_KEY_get0_public_key(ecKey);
   BIGNUM         *pub_bn      = BN_new();
   BN_CTX         *pub_bn_ctx  = BN_CTX_new();
-  unsigned int    uiBinSize   = 0;
+  int             iBinSize   = 0;
   
-  iGroup = EC_GROUP_get_curve_name(ec_group);
-
   BN_CTX_start(pub_bn_ctx);
 
   EC_POINT_point2bn(ec_group, pub, POINT_CONVERSION_UNCOMPRESSED, pub_bn, pub_bn_ctx);
 
-  uiBinSize = BN_num_bytes(pub_bn);
-  vOut.resize(uiBinSize, 0);
-
-  if (BN_bn2bin(pub_bn, &vOut[0]) != uiBinSize)
+  iBinSize = BN_num_bytes(pub_bn);
+  if (iBinSize <= 0)
   {
+    BN_CTX_end(pub_bn_ctx);
+    BN_CTX_free(pub_bn_ctx);
+    BN_clear_free(pub_bn);
+
+    return false;
+  }
+  vOut.resize(iBinSize, 0);
+
+  if (BN_bn2bin(pub_bn, &vOut[0]) != iBinSize)
+  {
+    BN_CTX_end(pub_bn_ctx);
+    BN_CTX_free(pub_bn_ctx);
+    BN_clear_free(pub_bn);
+
     return false;
   }
 
@@ -740,15 +780,19 @@ bool utils::ecPubToBin(const EC_KEY *ec_key, int &iGroup, std::vector<unsigned c
   return true;
 }
 
-bool utils::ecPrivToBin(const EC_KEY *ec_key, std::vector<unsigned char> &vOut)
+bool utils::ecPrivToBin(const EC_KEY *ecKey, std::vector<unsigned char> &vOut)
 {
-  const BIGNUM *priv      = EC_KEY_get0_private_key(ec_key);
-  unsigned int uiBinSize  = 0;
+  const BIGNUM *priv  = EC_KEY_get0_private_key(ecKey);
+  int iBinSize        = 0;
 
-  uiBinSize = BN_num_bytes(priv);
-  vOut.resize(uiBinSize, 0);
+  iBinSize = BN_num_bytes(priv);
+  if (iBinSize <= 0)
+  {
+    return false;
+  }
+  vOut.resize(iBinSize, 0);
 
-  if (BN_bn2bin(priv, &vOut[0]) != uiBinSize)
+  if (BN_bn2bin(priv, &vOut[0]) != iBinSize)
   {
     return false;
   }
@@ -756,7 +800,7 @@ bool utils::ecPrivToBin(const EC_KEY *ec_key, std::vector<unsigned char> &vOut)
   return true;
 }
 
-EC_POINT * utils::ecPubBinToPoint(const std::vector<unsigned char> &vBuffer, const EC_GROUP *ec_group)
+EC_POINT * utils::ecPubBinToPoint(const std::vector<unsigned char> &vBuffer, const EC_GROUP *ecGroup)
 {
   if (vBuffer.empty())
   {
@@ -766,13 +810,13 @@ EC_POINT * utils::ecPubBinToPoint(const std::vector<unsigned char> &vBuffer, con
   BIGNUM   *pubk_bn;
   BN_CTX   *pubk_bn_ctx;
 
-  EC_POINT *pubk_point = EC_POINT_new(ec_group);
+  EC_POINT *pubk_point = EC_POINT_new(ecGroup);
 
   pubk_bn = BN_bin2bn(&vBuffer[0], vBuffer.size(), NULL);
   pubk_bn_ctx = BN_CTX_new();
   BN_CTX_start(pubk_bn_ctx);
 
-  EC_POINT_bn2point(ec_group, pubk_bn, pubk_point, pubk_bn_ctx);
+  EC_POINT_bn2point(ecGroup, pubk_bn, pubk_point, pubk_bn_ctx);
 
   BN_CTX_end(pubk_bn_ctx);
   BN_CTX_free(pubk_bn_ctx);
@@ -795,7 +839,7 @@ bool utils::eciesTXGenerateSymKey(const int &iCurve, const std::vector<unsigned 
   EC_KEY_generate_key(ec_key);
   ec_group = EC_KEY_get0_group(ec_key);
 
-  iSymKeyBufSize = ((EC_GROUP_get_degree(ec_group) + 7) / 8);
+  iSymKeyBufSize = ecGetECDHSize(ec_group);
 
   if (iSymKeyBufSize <= 0)
   {
@@ -810,7 +854,7 @@ bool utils::eciesTXGenerateSymKey(const int &iCurve, const std::vector<unsigned 
   /* Generate the shared symmetric key (diffie-hellman primitive). */
   iRetval = ECDH_compute_key(&vSymKey[0], vSymKey.size(), peer_pubk_point, ec_key, NULL);
 
-  if (iRetval <= 0 || iRetval != iSymKeyBufSize)
+  if (iRetval != iSymKeyBufSize)
   {
     // TODO: ...
     return false;
@@ -823,18 +867,18 @@ bool utils::eciesTXGenerateSymKey(const int &iCurve, const std::vector<unsigned 
 
   /* Write the ephemeral key's public key to the output buffer. */
 
-  return ecPubToBin(ec_key, iRetval, vEPubKey);
+  return ecPubToBin(ec_key, vEPubKey);
 }
 
 /* (RX) Generate the shared symmetric key */
-bool utils::eciesRXGenerateSymKey(const EC_KEY *ec_key, const std::vector<unsigned char> &vPeerPubKey, std::vector<unsigned char> &vSymKey)
+bool utils::eciesRXGenerateSymKey(const EC_KEY *ecKey, const std::vector<unsigned char> &vPeerPubKey, std::vector<unsigned char> &vSymKey)
 {
-  const EC_GROUP *ec_group        = EC_KEY_get0_group(ec_key);
+  const EC_GROUP *ec_group        = EC_KEY_get0_group(ecKey);
   EC_POINT       *peer_pubk_point = NULL;
   int             iSymKeyBufSize  = 0;
   int             iRetval         = 0;
 
-  iSymKeyBufSize = ((EC_GROUP_get_degree(ec_group) + 7) / 8);
+  iSymKeyBufSize = ecGetECDHSize(ec_group);
 
   if (iSymKeyBufSize <= 0)
   {
@@ -847,9 +891,9 @@ bool utils::eciesRXGenerateSymKey(const EC_KEY *ec_key, const std::vector<unsign
   peer_pubk_point = ecPubBinToPoint(vPeerPubKey, ec_group);
 
   /* Generate the shared symmetric key (diffie-hellman primitive). */
-  iRetval = ECDH_compute_key(&vSymKey[0], vSymKey.size(), peer_pubk_point, (EC_KEY *)ec_key, NULL);
+  iRetval = ECDH_compute_key(&vSymKey[0], vSymKey.size(), peer_pubk_point, (EC_KEY *)ecKey, NULL);
 
-  if (iRetval <= 0 || iRetval != iSymKeyBufSize)
+  if (iRetval != iSymKeyBufSize)
   {
     // TODO: ...
     return false;

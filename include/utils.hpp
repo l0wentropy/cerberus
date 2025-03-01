@@ -133,6 +133,16 @@ public:
 
   static int strCurveToNID(const std::string &sCurveName);
 
+  static std::string NID2Str(const int &iNID);
+
+  static EC_GROUP * ecGetGroup(const EC_KEY *ecKey);
+
+  static int ecGetGroup(const EC_GROUP *ecGroup);
+
+  static int ecGetECDHSize(const EC_KEY *ecKey);
+
+  static int ecGetECDHSize(const EC_GROUP *ecGroup);
+
   static bool genKeyPairRSA(
     const std::string &sPathPublic,
     const std::string &sPathPrivate,
@@ -184,15 +194,15 @@ public:
 
   static int decryptRsa(const unsigned int &len, unsigned char *from, unsigned char *to, RSA *rsaKey);
 
-  static bool ecPubToBin(const EC_KEY *ec_key, int &iGroup, std::vector<unsigned char> &vOut);
+  static bool ecPubToBin(const EC_KEY *ecKey, std::vector<unsigned char> &vOut);
 
-  static bool ecPrivToBin(const EC_KEY *ec_key, std::vector<unsigned char> &vOut);
+  static bool ecPrivToBin(const EC_KEY *ecKey, std::vector<unsigned char> &vOut);
 
-  static EC_POINT * ecPubBinToPoint(const std::vector<unsigned char> &vBuffer, const EC_GROUP *ec_group);
+  static EC_POINT * ecPubBinToPoint(const std::vector<unsigned char> &vBuffer, const EC_GROUP *ecGroup);
 
   static bool eciesTXGenerateSymKey(const int &iCurve, const std::vector<unsigned char> &vPeerPubKey, std::vector<unsigned char> &vEPubKey, std::vector<unsigned char> &vSymKey);
 
-  static bool eciesRXGenerateSymKey(const EC_KEY *ec_key, const std::vector<unsigned char> &vPeerPubKey, std::vector<unsigned char> &vSymKey);
+  static bool eciesRXGenerateSymKey(const EC_KEY *ecKey, const std::vector<unsigned char> &vPeerPubKey, std::vector<unsigned char> &vSymKey);
 
   static int gcm_encrypt_in_place(
     unsigned char *plaintext, int plaintext_len,
