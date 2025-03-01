@@ -1312,7 +1312,7 @@ bool utils::gcmProcessFile(
 	unsigned long long bytesWrited = 0;
   bool bReadTillReached = false;
 	const unsigned int chunkSize = GCM_PROCESS_CHUNK_SIZE;
-	std::vector<unsigned char> vBuffer(chunkSize);
+	std::vector<unsigned char> vBuffer(chunkSize, 0);
 
 	const mode_t flagsRead = O_RDONLY | O_NOATIME;
   const mode_t flagsWrite = O_CREAT | O_EXCL | O_WRONLY;
@@ -1347,13 +1347,11 @@ bool utils::gcmProcessFile(
 	{
 		bytesReaded += readed;
 
-    if (readTill != 0 && bytesReaded >= readTill)
+    if (readTill != 0 && bytesReaded > readTill)
     {
-      const int leftOver = readTill - bytesWrited;
-      if (leftOver > 0)
-      {
-        leftOver > readed ? 0 : readed = leftOver;
-      }
+      bytesReaded -= readed;
+      readed = readTill - bytesWrited;
+      bytesReaded += readed;
       bReadTillReached = true;
     }
 
