@@ -4,7 +4,7 @@ include(CheckCCompilerFlag)
 include(CheckCXXCompilerFlag)
 include(CheckCXXSourceCompiles)
 
-project(Cerberus VERSION 3.0.0)
+project(Cerberus VERSION 3.0.1)
 
 set(SOURCES
 	src/utils.cpp
