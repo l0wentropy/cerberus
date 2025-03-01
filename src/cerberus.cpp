@@ -97,12 +97,12 @@ void Cerberus::setRsaKey(RSA *_rsaKey)
 
 bool Cerberus::setEcKey(EC_KEY *_ecKey)
 {
-  // TODO: move openssl api to utils
   ecKey = _ecKey;
-  ecGroup = (EC_GROUP*)EC_KEY_get0_group(ecKey);
-  iEcPointCapacity = ((EC_GROUP_get_degree(ecGroup) + 7) / 8);
+  ecGroup = utils::ecGetGroup(ecKey);
+  iEcGroup = utils::ecGetGroup(ecGroup);
+  iEcPointCapacity = utils::ecGetECDHSize(ecGroup);
 
-  return utils::ecPubToBin(ecKey, iEcGroup, vEcPub);
+  return utils::ecPubToBin(ecKey, vEcPub);
 }
 
 void Cerberus::setPassphrase(const std::vector<unsigned char> &_vPassphraseBytes)
@@ -283,7 +283,7 @@ bool Cerberus::_encryptFile()
 
       printf("ECIES:");
       printf("\n\t");
-      printf("Curve [%s]", OBJ_nid2sn(iEcGroup)); // wrap into utils
+      printf("Curve [%s]", utils::NID2Str(iEcGroup).c_str());
       printf("\n\t");
       printf("Affiliate point size [%lu]", vSecretSequence.size());
       printf("\n\t");
@@ -588,11 +588,8 @@ bool Cerberus::_decryptFile()
   }
   else if (ucEncOpt == AES_ENC_OPT_KEY || ucEncOpt == AES_ENC_OPT_ECC)
   {
-    unsigned int uiMetaSize = ARGON2_METADATA_SIZE;
-    if (ucEncOpt == AES_ENC_OPT_ECC)
-    {
-      uiMetaSize = ECIES_METADATA_SIZE;
-    }
+    // exclude tag size for now
+    const unsigned int uiMetaSize = ucEncOpt == AES_ENC_OPT_KEY ? ARGON2_METADATA_SIZE : ECIES_METADATA_SIZE;
 
     if (llFileSize <= uiMetaSize + AES_KEY_OPCODE_SIZE + AES_TAG_OPCODE_SIZE + CERBERUS_SIGNATURE_SIZE)
     {
@@ -636,17 +633,17 @@ bool Cerberus::_decryptFile()
 
       if (!utils::eciesRXGenerateSymKey(ecKey, vEcEphemeral, vSecretSequence))
       {
-        printf("Cannot generate RX symmetric key\n");
+        printf("Cannot generate RX shared key\n");
         return false;
       }
 
       printf("ECIES:");
       printf("\n\t");
-      printf("Curve [%s]", OBJ_nid2sn(iEcGroup)); // wrap into utils
+      printf("Curve [%s]", utils::NID2Str(iEcGroup).c_str());
       printf("\n\t");
       printf("Affiliate point size [%lu]", vSecretSequence.size());
       printf("\n\t");
-      printf("EC ephemeral key size [%lu])", vEcEphemeral.size());
+      printf("EC ephemeral key size [%lu]", vEcEphemeral.size());
       
       printf("\n\t");
       printf("\n");
